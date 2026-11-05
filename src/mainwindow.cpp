@@ -711,12 +711,6 @@ void MainWindow::onProfileSelected(int index) {
     }
     std::string err;
     if (m_deviceManager.setProfile(static_cast<uint8_t>(index), &err)) {
-        m_msgLabel->setText(tr("Switched to Hardware Profile %1 (blinking key indicator...)").arg(index + 1));
-        // Blink '-' (index 0) or '=' (index 1) in pure white 3 times
-        m_deviceManager.blinkProfileKey(static_cast<uint8_t>(index), 3);
-
-        // Restore active lighting
-        onApply();
         m_msgLabel->setText(tr("Switched to Hardware Profile %1").arg(index + 1));
     } else {
         m_msgLabel->setText(tr("Failed to switch profile: %1").arg(QString::fromStdString(err)));

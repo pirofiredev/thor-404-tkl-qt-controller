@@ -94,7 +94,6 @@ public:
 
     bool applyEffect(const EffectConfig& config, std::string* errorMessage = nullptr);
     bool setProfile(uint8_t profileIndex, std::string* errorMessage = nullptr);
-    bool blinkProfileKey(uint8_t profileIndex, int blinkCount = 3);
     bool assignKeyMacro(uint8_t keyIndex, const std::vector<uint8_t>& scancodes, std::string* errorMessage = nullptr);
 
     void setDebug(bool enable) { m_debug = enable; }

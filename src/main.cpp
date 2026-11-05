@@ -147,8 +147,7 @@ int main(int argc, char *argv[]) {
                 std::cerr << "Profile switch failed: " << err << "\n";
                 return 1;
             }
-            std::cout << "Profile switched to " << prof << ", blinking key...\n";
-            dm.blinkProfileKey(static_cast<uint8_t>(prof), 3);
+            std::cout << "Profile switched to " << prof << "\n";
             return 0;
         } else if (arg == "--set-static" && i + 3 < argc) {
             cliMode = true;
