@@ -216,14 +216,16 @@ void MainWindow::setupUi() {
     auto *profForm = new QFormLayout(profGroup);
     m_profileCombo = new QComboBox(profGroup);
     m_profileCombo->addItem(tr("Profile 1 (Default / Gaming)"), 0);
-    m_profileCombo->addItem(tr("Profile 2 (Work / Productivity)"), 1);
-    m_profileCombo->addItem(tr("Profile 3 (Custom)"), 2);
+    m_profileCombo->addItem(tr("Profile 2 (Office / Custom)"), 1);
     m_applyProfileBtn = new QPushButton(tr("Switch Profile"), profGroup);
     connect(m_applyProfileBtn, &QPushButton::clicked, this, [this]() {
         onProfileSelected(m_profileCombo->currentIndex());
     });
+    auto *profNote = new QLabel(tr("<small>Note: Thor 404 hardware supports 2 onboard profiles. You can also toggle between them using <b>Fn + Backspace</b> (Rec/Profile) or keyboard shortcuts.</small>"), profGroup);
+    profNote->setWordWrap(true);
     profForm->addRow(tr("Select Profile:"), m_profileCombo);
     profForm->addRow("", m_applyProfileBtn);
+    profForm->addRow(profNote);
     profileLayout->addWidget(profGroup);
 
     auto *macroGroup = new QGroupBox(tr("Direct Hardware Key Macro Assignment"), profileTab);

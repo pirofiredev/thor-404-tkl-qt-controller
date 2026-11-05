@@ -302,16 +302,36 @@ bool DeviceManager::setProfile(uint8_t profileIndex, std::string* errorMessage) 
         return false;
     }
 
-    // Profile switch packet: Report ID 0x00, Payload 0x04 0x20 [profileIndex: 0-2]
-    PacketBuffer buf{};
-    buf[0] = 0x00;
-    buf[1] = 0x04;
-    buf[2] = 0x20;
-    buf[3] = std::clamp<uint8_t>(profileIndex, 0, 2);
+    constexpr auto SLEEP_DURATION = std::chrono::milliseconds(10);
 
-    if (!sendFeatureReport(buf)) {
-        if (errorMessage) *errorMessage = "Failed to switch hardware profile";
-        return false;
+    // Profile switch requires standard framing handshake, command 0x04 0x12 / 0x04 0x20, and finalize
+    std::vector<PacketBuffer> seq;
+    seq.push_back(makeHandshakePacket1());
+    seq.push_back(makeHandshakePacket2());
+    seq.push_back(makeHandshakePacket3());
+
+    // Profile selection packet (0 or 1 for Thor 404)
+    PacketBuffer profPkt{};
+    profPkt[0] = 0x00;
+    profPkt[1] = 0x04;
+    profPkt[2] = 0x12; // Profile switch opcode
+    profPkt[3] = (profileIndex % 2 == 0) ? 0x00 : 0x01;
+    seq.push_back(profPkt);
+
+    seq.push_back(makeFinalizePacket1());
+    seq.push_back(makeFinalizePacket2());
+
+    for (size_t i = 0; i < seq.size(); ++i) {
+        if (!sendFeatureReport(seq[i])) {
+            if (errorMessage) *errorMessage = "Failed to switch hardware profile";
+            return false;
+        }
+        PacketBuffer resp{};
+        resp[0] = 0x00;
+        hid_get_feature_report(m_handle, resp.data(), resp.size());
+        if (i + 1 < seq.size()) {
+            std::this_thread::sleep_for(SLEEP_DURATION);
+        }
     }
     return true;
 }
