@@ -67,11 +67,12 @@ private:
         QColor color{255, 0, 0};
         bool multicolor{false};
     };
-    std::array<QuickSlot, 2> m_quickSlots;
+    std::array<QuickSlot, 3> m_quickSlots;
     bool m_isLightOn{true};
 
     QAction *m_quickAction1{nullptr};
     QAction *m_quickAction2{nullptr};
+    QAction *m_quickAction3{nullptr};
     QAction *m_toggleAction{nullptr};
 
     // UI elements

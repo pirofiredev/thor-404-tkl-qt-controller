@@ -28,9 +28,11 @@ MainWindow::MainWindow(QWidget *parent)
     resize(520, 590);
     setMinimumWidth(460);
 
-    // Initialize default quick action slots
+    // Initialize default quick action slots:
+    // Slot 1: Static Red, Slot 2: Static Blue, Slot 3: Wave Rainbow
     m_quickSlots[0] = { tr("Red Static"), EffectId::Static, QColor(255, 0, 0), false };
-    m_quickSlots[1] = { tr("Wave Rainbow"), EffectId::Wave, QColor(255, 0, 0), true };
+    m_quickSlots[1] = { tr("Blue Static"), EffectId::Static, QColor(0, 0, 255), false };
+    m_quickSlots[2] = { tr("Wave Rainbow"), EffectId::Wave, QColor(255, 0, 0), true };
 
     setupUi();
     setupTray();
@@ -307,7 +309,7 @@ void MainWindow::setupUi() {
     trayLayout->setContentsMargins(12, 12, 12, 12);
     trayLayout->setSpacing(14);
 
-    for (int slotIdx = 0; slotIdx < 2; ++slotIdx) {
+    for (int slotIdx = 0; slotIdx < 3; ++slotIdx) {
         auto *slotBox = new QGroupBox(tr("Right-Click Quick Action %1").arg(slotIdx + 1), trayTab);
         auto *slotForm = new QFormLayout(slotBox);
 
@@ -412,10 +414,28 @@ void MainWindow::setupTray() {
         updateTrayMenuText();
     });
 
-    // Adjustable quick action slot 2 (Default: Wave Rainbow)
+    // Adjustable quick action slot 2 (Default: Blue Static)
     m_quickAction2 = m_trayMenu->addAction("");
     connect(m_quickAction2, &QAction::triggered, this, [this]() {
         const auto &slot = m_quickSlots[1];
+        EffectConfig cfg;
+        cfg.effect = slot.effect;
+        cfg.r = static_cast<uint8_t>(slot.color.red());
+        cfg.g = static_cast<uint8_t>(slot.color.green());
+        cfg.b = static_cast<uint8_t>(slot.color.blue());
+        cfg.multicolor = slot.multicolor;
+        cfg.brightness = static_cast<uint8_t>(m_brightnessSlider->value());
+        cfg.speed = static_cast<uint8_t>(m_speedSlider->value());
+        cfg.direction = static_cast<Direction>(m_directionCombo->currentData().toInt());
+        m_isLightOn = true;
+        applyConfig(cfg);
+        updateTrayMenuText();
+    });
+
+    // Adjustable quick action slot 3 (Default: Wave Rainbow)
+    m_quickAction3 = m_trayMenu->addAction("");
+    connect(m_quickAction3, &QAction::triggered, this, [this]() {
+        const auto &slot = m_quickSlots[2];
         EffectConfig cfg;
         cfg.effect = slot.effect;
         cfg.r = static_cast<uint8_t>(slot.color.red());
@@ -488,6 +508,17 @@ void MainWindow::updateTrayMenuText() {
         QPixmap p2(12, 12);
         p2.fill(s2.multicolor ? Qt::cyan : s2.color);
         m_quickAction2->setIcon(QIcon(p2));
+    }
+
+    if (m_quickAction3) {
+        const auto &s3 = m_quickSlots[2];
+        QString desc3 = s3.multicolor ? QString("%1 (Rainbow)").arg(effectName(s3.effect))
+                                      : QString("%1 (%2)").arg(effectName(s3.effect)).arg(s3.color.name().toUpper());
+        m_quickAction3->setText(tr("Preset 3: %1").arg(desc3));
+
+        QPixmap p3(12, 12);
+        p3.fill(s3.multicolor ? Qt::cyan : s3.color);
+        m_quickAction3->setIcon(QIcon(p3));
     }
 
     if (m_toggleAction) {
