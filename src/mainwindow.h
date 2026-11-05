@@ -42,6 +42,8 @@ private slots:
     void onAssignMacro();
     void onTrayActivated(QSystemTrayIcon::ActivationReason reason);
     void updateTrayIcon();
+    void updateTrayMenuText();
+    void onToggleLighting();
 
 private:
     void setupUi();
@@ -57,6 +59,20 @@ private:
     QColor m_selectedColor{255, 0, 0}; // default red
     QSystemTrayIcon *m_trayIcon{nullptr};
     QMenu *m_trayMenu{nullptr};
+
+    // Tray Quick Actions Configuration
+    struct QuickSlot {
+        QString name;
+        EffectId effect{EffectId::Static};
+        QColor color{255, 0, 0};
+        bool multicolor{false};
+    };
+    std::array<QuickSlot, 2> m_quickSlots;
+    bool m_isLightOn{true};
+
+    QAction *m_quickAction1{nullptr};
+    QAction *m_quickAction2{nullptr};
+    QAction *m_toggleAction{nullptr};
 
     // UI elements
     QLabel *m_statusBadge{nullptr};

@@ -25,8 +25,12 @@ namespace thor {
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
     setWindowTitle(tr("Genesis Thor 404 TKL"));
-    resize(520, 560);
+    resize(520, 590);
     setMinimumWidth(460);
+
+    // Initialize default quick action slots
+    m_quickSlots[0] = { tr("Red Static"), EffectId::Static, QColor(255, 0, 0), false };
+    m_quickSlots[1] = { tr("Wave Rainbow"), EffectId::Wave, QColor(255, 0, 0), true };
 
     setupUi();
     setupTray();
@@ -297,6 +301,79 @@ void MainWindow::setupUi() {
     integLayout->addStretch(1);
     m_tabs->addTab(integrationTab, tr("Integrations"));
 
+    // TAB 4: Tray Quick Actions Customizer
+    auto *trayTab = new QWidget();
+    auto *trayLayout = new QVBoxLayout(trayTab);
+    trayLayout->setContentsMargins(12, 12, 12, 12);
+    trayLayout->setSpacing(14);
+
+    for (int slotIdx = 0; slotIdx < 2; ++slotIdx) {
+        auto *slotBox = new QGroupBox(tr("Right-Click Quick Action %1").arg(slotIdx + 1), trayTab);
+        auto *slotForm = new QFormLayout(slotBox);
+
+        auto *effectCombo = new QComboBox(slotBox);
+        effectCombo->addItem(tr("Static"), static_cast<int>(EffectId::Static));
+        effectCombo->addItem(tr("Breathing"), static_cast<int>(EffectId::Breathing));
+        effectCombo->addItem(tr("Neon"), static_cast<int>(EffectId::Neon));
+        effectCombo->addItem(tr("Wave"), static_cast<int>(EffectId::Wave));
+        effectCombo->addItem(tr("Rainbow"), static_cast<int>(EffectId::Rainbow));
+        effectCombo->addItem(tr("Spectrum"), static_cast<int>(EffectId::Spectrum));
+        effectCombo->addItem(tr("Colourful"), static_cast<int>(EffectId::Colourful));
+        effectCombo->addItem(tr("Circle"), static_cast<int>(EffectId::Circle));
+        effectCombo->addItem(tr("Stars"), static_cast<int>(EffectId::Stars));
+        effectCombo->addItem(tr("Raindrops"), static_cast<int>(EffectId::Raindrops));
+        effectCombo->addItem(tr("Sine Wave"), static_cast<int>(EffectId::SineWave));
+
+        // Select slot's current effect
+        int foundEff = effectCombo->findData(static_cast<int>(m_quickSlots[slotIdx].effect));
+        if (foundEff >= 0) effectCombo->setCurrentIndex(foundEff);
+
+        auto *colorRow = new QHBoxLayout();
+        auto *colorBtn = new QPushButton(m_quickSlots[slotIdx].color.name().toUpper(), slotBox);
+        auto *multiCheck = new QCheckBox(tr("Rainbow"), slotBox);
+        multiCheck->setChecked(m_quickSlots[slotIdx].multicolor);
+
+        QPixmap pix(16, 16);
+        pix.fill(m_quickSlots[slotIdx].color);
+        colorBtn->setIcon(QIcon(pix));
+
+        connect(colorBtn, &QPushButton::clicked, this, [this, slotIdx, colorBtn]() {
+            QColor c = QColorDialog::getColor(m_quickSlots[slotIdx].color, this, tr("Select Slot Color"));
+            if (c.isValid()) {
+                m_quickSlots[slotIdx].color = c;
+                QPixmap p(16, 16);
+                p.fill(c);
+                colorBtn->setIcon(QIcon(p));
+                colorBtn->setText(c.name().toUpper());
+                updateTrayMenuText();
+            }
+        });
+
+        connect(effectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, slotIdx, effectCombo]() {
+            m_quickSlots[slotIdx].effect = static_cast<EffectId>(effectCombo->currentData().toInt());
+            updateTrayMenuText();
+        });
+
+        connect(multiCheck, &QCheckBox::toggled, this, [this, slotIdx](bool checked) {
+            m_quickSlots[slotIdx].multicolor = checked;
+            updateTrayMenuText();
+        });
+
+        colorRow->addWidget(colorBtn);
+        colorRow->addWidget(multiCheck);
+
+        slotForm->addRow(tr("Effect:"), effectCombo);
+        slotForm->addRow(tr("Color:"), colorRow);
+        trayLayout->addWidget(slotBox);
+    }
+
+    auto *toggleInfo = new QLabel(tr("<b>Toggle Action:</b> Right-clicking the tray icon and selecting <i>Toggle Off / On</i> turns the backlight on or off, remembering your previous preset."), trayTab);
+    toggleInfo->setWordWrap(true);
+    trayLayout->addWidget(toggleInfo);
+    trayLayout->addStretch(1);
+
+    m_tabs->addTab(trayTab, tr("Tray Actions"));
+
     mainLayout->addWidget(m_tabs);
 
     // Status Message footer
@@ -317,28 +394,47 @@ void MainWindow::setupTray() {
 
     m_trayMenu->addSeparator();
 
-    auto *redAction = m_trayMenu->addAction(tr("Red Static"));
-    connect(redAction, &QAction::triggered, this, [this]() {
+    // Adjustable quick action slot 1 (Default: Red Static)
+    m_quickAction1 = m_trayMenu->addAction("");
+    connect(m_quickAction1, &QAction::triggered, this, [this]() {
+        const auto &slot = m_quickSlots[0];
         EffectConfig cfg;
-        cfg.effect = EffectId::Static;
-        cfg.r = 255; cfg.g = 0; cfg.b = 0;
+        cfg.effect = slot.effect;
+        cfg.r = static_cast<uint8_t>(slot.color.red());
+        cfg.g = static_cast<uint8_t>(slot.color.green());
+        cfg.b = static_cast<uint8_t>(slot.color.blue());
+        cfg.multicolor = slot.multicolor;
+        cfg.brightness = static_cast<uint8_t>(m_brightnessSlider->value());
+        cfg.speed = static_cast<uint8_t>(m_speedSlider->value());
+        cfg.direction = static_cast<Direction>(m_directionCombo->currentData().toInt());
+        m_isLightOn = true;
         applyConfig(cfg);
+        updateTrayMenuText();
     });
 
-    auto *waveAction = m_trayMenu->addAction(tr("Wave Effect"));
-    connect(waveAction, &QAction::triggered, this, [this]() {
+    // Adjustable quick action slot 2 (Default: Wave Rainbow)
+    m_quickAction2 = m_trayMenu->addAction("");
+    connect(m_quickAction2, &QAction::triggered, this, [this]() {
+        const auto &slot = m_quickSlots[1];
         EffectConfig cfg;
-        cfg.effect = EffectId::Wave;
-        cfg.multicolor = true;
+        cfg.effect = slot.effect;
+        cfg.r = static_cast<uint8_t>(slot.color.red());
+        cfg.g = static_cast<uint8_t>(slot.color.green());
+        cfg.b = static_cast<uint8_t>(slot.color.blue());
+        cfg.multicolor = slot.multicolor;
+        cfg.brightness = static_cast<uint8_t>(m_brightnessSlider->value());
+        cfg.speed = static_cast<uint8_t>(m_speedSlider->value());
+        cfg.direction = static_cast<Direction>(m_directionCombo->currentData().toInt());
+        m_isLightOn = true;
         applyConfig(cfg);
+        updateTrayMenuText();
     });
 
-    auto *offAction = m_trayMenu->addAction(tr("Turn Off"));
-    connect(offAction, &QAction::triggered, this, [this]() {
-        EffectConfig cfg;
-        cfg.effect = EffectId::Off;
-        applyConfig(cfg);
-    });
+    m_trayMenu->addSeparator();
+
+    // Toggle lighting action (Toggle Off / On)
+    m_toggleAction = m_trayMenu->addAction("");
+    connect(m_toggleAction, &QAction::triggered, this, &MainWindow::onToggleLighting);
 
     m_trayMenu->addSeparator();
 
@@ -348,8 +444,69 @@ void MainWindow::setupTray() {
     m_trayIcon->setContextMenu(m_trayMenu);
     connect(m_trayIcon, &QSystemTrayIcon::activated, this, &MainWindow::onTrayActivated);
 
+    updateTrayMenuText();
     updateTrayIcon();
     m_trayIcon->show();
+}
+
+static QString effectName(EffectId eff) {
+    switch (eff) {
+        case EffectId::Static: return "Static";
+        case EffectId::Breathing: return "Breathing";
+        case EffectId::Neon: return "Neon";
+        case EffectId::Wave: return "Wave";
+        case EffectId::Rainbow: return "Rainbow";
+        case EffectId::Spectrum: return "Spectrum";
+        case EffectId::Colourful: return "Colourful";
+        case EffectId::Circle: return "Circle";
+        case EffectId::Stars: return "Stars";
+        case EffectId::Raindrops: return "Raindrops";
+        case EffectId::SineWave: return "Sine Wave";
+        case EffectId::Off: return "Off";
+        default: return "Custom";
+    }
+}
+
+void MainWindow::updateTrayMenuText() {
+    if (m_quickAction1) {
+        const auto &s1 = m_quickSlots[0];
+        QString desc1 = s1.multicolor ? QString("%1 (Rainbow)").arg(effectName(s1.effect))
+                                      : QString("%1 (%2)").arg(effectName(s1.effect)).arg(s1.color.name().toUpper());
+        m_quickAction1->setText(tr("Preset 1: %1").arg(desc1));
+
+        QPixmap p1(12, 12);
+        p1.fill(s1.multicolor ? Qt::magenta : s1.color);
+        m_quickAction1->setIcon(QIcon(p1));
+    }
+
+    if (m_quickAction2) {
+        const auto &s2 = m_quickSlots[1];
+        QString desc2 = s2.multicolor ? QString("%1 (Rainbow)").arg(effectName(s2.effect))
+                                      : QString("%1 (%2)").arg(effectName(s2.effect)).arg(s2.color.name().toUpper());
+        m_quickAction2->setText(tr("Preset 2: %1").arg(desc2));
+
+        QPixmap p2(12, 12);
+        p2.fill(s2.multicolor ? Qt::cyan : s2.color);
+        m_quickAction2->setIcon(QIcon(p2));
+    }
+
+    if (m_toggleAction) {
+        m_toggleAction->setText(m_isLightOn ? tr("Toggle Lighting (Turn Off)") : tr("Toggle Lighting (Turn On)"));
+    }
+}
+
+void MainWindow::onToggleLighting() {
+    if (m_isLightOn) {
+        EffectConfig cfg;
+        cfg.effect = EffectId::Off;
+        applyConfig(cfg);
+        m_isLightOn = false;
+    } else {
+        // Turn back on with current lighting settings
+        onApply();
+        m_isLightOn = true;
+    }
+    updateTrayMenuText();
 }
 
 void MainWindow::updateTrayIcon() {
