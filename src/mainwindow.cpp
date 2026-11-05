@@ -42,6 +42,13 @@ MainWindow::MainWindow(QWidget *parent)
         applyConfig(cfg);
     });
 
+    connect(&m_mqttService, &MqttLightService::connectedChanged, this, [this](bool connected, const QString &message) {
+        if (m_mqttStatusLabel) {
+            QString color = connected ? "#388e3c" : "#d32f2f";
+            m_mqttStatusLabel->setText(QString("<b style='color:%1;'>%2</b><br><small>Auto-discovery: <code>homeassistant/light/thor_404/config</code></small>").arg(color, message));
+        }
+    });
+
     // Connect KDE virtual sysfs LED brightness callback
     m_sysfsLedService.setBrightnessCallback([this](uint8_t brightness) {
         if (m_brightnessSlider) {

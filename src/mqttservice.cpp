@@ -9,14 +9,21 @@ namespace thor {
 
 // Minimal MQTT 3.1.1 implementation over QTcpSocket (zero external dependencies)
 MqttLightService::MqttLightService(QObject *parent)
-    : QObject(parent), m_socket(new QTcpSocket(this)), m_reconnectTimer(new QTimer(this)) {
+    : QObject(parent), m_socket(new QTcpSocket(this)),
+      m_reconnectTimer(new QTimer(this)),
+      m_connectTimeoutTimer(new QTimer(this)) {
     connect(m_socket, &QTcpSocket::connected, this, &MqttLightService::onConnected);
     connect(m_socket, &QTcpSocket::readyRead, this, &MqttLightService::onReadyRead);
     connect(m_socket, &QTcpSocket::errorOccurred, this, &MqttLightService::onError);
 
+    m_connectTimeoutTimer->setSingleShot(true);
+    m_connectTimeoutTimer->setInterval(30000); // 30 seconds connect timeout
+    connect(m_connectTimeoutTimer, &QTimer::timeout, this, &MqttLightService::onConnectTimeout);
+
     m_reconnectTimer->setInterval(10000);
     connect(m_reconnectTimer, &QTimer::timeout, this, [this]() {
         if (m_socket->state() == QAbstractSocket::UnconnectedState) {
+            m_connectTimeoutTimer->start();
             m_socket->connectToHost(m_host, m_port);
         }
     });
@@ -32,16 +39,25 @@ void MqttLightService::start(const QString &host, quint16 port, const QString &u
     m_user = user;
     m_pass = pass;
     m_reconnectTimer->start();
+    m_connectTimeoutTimer->start();
     m_socket->connectToHost(m_host, m_port);
 }
 
 void MqttLightService::stop() {
     m_reconnectTimer->stop();
+    m_connectTimeoutTimer->stop();
     if (m_socket->state() == QAbstractSocket::ConnectedState) {
         // DISCONNECT packet: 0xE0 0x00
         const char disc[] = { (char)0xE0, 0x00 };
         m_socket->write(disc, 2);
         m_socket->disconnectFromHost();
+    }
+}
+
+void MqttLightService::onConnectTimeout() {
+    if (m_socket->state() != QAbstractSocket::ConnectedState) {
+        m_socket->abort();
+        emit connectedChanged(false, tr("Connection timed out after 30 seconds"));
     }
 }
 
@@ -201,7 +217,11 @@ void MqttLightService::onReadyRead() {
             if (i + 1 < data.size()) {
                 uint8_t returnCode = static_cast<uint8_t>(data[i + 1]);
                 if (returnCode == 0) {
+                    m_connectTimeoutTimer->stop();
                     publishDiscovery();
+                    emit connectedChanged(true, tr("Connected to MQTT Broker & Published Discovery"));
+                } else {
+                    emit connectedChanged(false, tr("Broker rejected connection (code: %1)").arg(returnCode));
                 }
             }
             i += remLen;
@@ -285,7 +305,7 @@ void MqttLightService::handleIncomingPublish(const QString &topic, const QByteAr
 }
 
 void MqttLightService::onError() {
-    // Reconnect handled by timer
+    emit connectedChanged(false, tr("MQTT Socket Error: %1").arg(m_socket->errorString()));
 }
 
 } // namespace thor

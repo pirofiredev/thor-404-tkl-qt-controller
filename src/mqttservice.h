@@ -25,10 +25,14 @@ public:
 
     void publishState(bool power, uint8_t brightness, const QColor &color, const QString &effect);
 
+signals:
+    void connectedChanged(bool connected, const QString &message);
+
 private slots:
     void onConnected();
     void onReadyRead();
     void onError();
+    void onConnectTimeout();
 
 private:
     void sendConnect();
@@ -43,6 +47,7 @@ private:
     QString m_user;
     QString m_pass;
     QTimer *m_reconnectTimer{nullptr};
+    QTimer *m_connectTimeoutTimer{nullptr};
     std::function<void(const EffectConfig&)> m_applyCallback;
 
     bool m_currentPower{true};
