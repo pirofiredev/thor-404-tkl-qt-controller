@@ -69,9 +69,9 @@ target_link_directories(test-framing PRIVATE
 
 # Install rules
 install(TARGETS thor-404-controller DESTINATION bin)
-install(FILES 99-genesis-thor.rules DESTINATION /lib/udev/rules.d/)
-install(FILES thor-404-controller.desktop DESTINATION share/applications)
-install(FILES resources/genesis-logo.svg DESTINATION share/icons/hicolor/scalable/apps/ RENAME thor-404-controller.svg)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/99-genesis-thor.rules DESTINATION /lib/udev/rules.d/)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/thor-404-controller.desktop DESTINATION share/applications)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/resources/genesis-logo.svg DESTINATION share/icons/hicolor/scalable/apps/ RENAME thor-404-controller.svg)
 
 # CPack Packaging Configuration
 set(CPACK_PACKAGE_NAME "thor-404-controller")
