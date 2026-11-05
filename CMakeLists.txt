@@ -67,10 +67,26 @@ target_link_directories(test-framing PRIVATE
     ${HIDAPI_LIBRARY_DIRS}
 )
 
+# Generate desktop entry at build time
+set(DESKTOP_FILE "${CMAKE_CURRENT_BINARY_DIR}/thor-404-controller.desktop")
+file(WRITE ${DESKTOP_FILE}
+"[Desktop Entry]
+Type=Application
+Name=Genesis Thor 404 Controller
+GenericName=Keyboard Controller
+Comment=Native Linux Controller for Genesis Thor 404 TKL Keyboard
+Exec=thor-404-controller
+Icon=thor-404-controller
+Terminal=false
+Categories=HardwareSettings;Settings;Utility;Qt;
+StartupWMClass=thor-404-controller
+Keywords=keyboard;genesis;rgb;lighting;thor;
+")
+
 # Install rules
 install(TARGETS thor-404-controller DESTINATION bin)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/99-genesis-thor.rules DESTINATION /lib/udev/rules.d/)
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/thor-404-controller.desktop DESTINATION share/applications)
+install(FILES ${DESKTOP_FILE} DESTINATION share/applications)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/resources/genesis-logo.svg DESTINATION share/icons/hicolor/scalable/apps/ RENAME thor-404-controller.svg)
 
 # CPack Packaging Configuration

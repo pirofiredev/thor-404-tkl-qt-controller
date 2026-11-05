@@ -6,6 +6,7 @@ releases/
 *.deb
 *.zip
 *.tar.gz
+*.desktop
 *.o
 *.a
 *.so
