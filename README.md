@@ -8,7 +8,7 @@ Comprehensive Linux Qt6 & C++20 controller for Genesis Thor 404 TKL keyboard (an
 - **Genesis SVG App & Tray Icon**: Styled Genesis emblem with full Wayland desktop taskbar support, desktop entry integration, and theme-adaptive tray icon.
 - **System Startup & Autostart**: GUI option to automatically launch on system login in the background.
 - **Home Assistant MQTT Discovery**: Auto-registers a native Light entity (`homeassistant/light/thor_404/config`) with persistent auto-reconnect on startup.
-- **JamesDSP-inspired UI**: Clean native Qt Widgets layout inheriting KDE Plasma / Breeze theme palettes.
+- **JamesDSP4Linux-inspired UI**: Clean native Qt Widgets layout inheriting KDE Plasma / Breeze theme palettes.
 
 ---
 
