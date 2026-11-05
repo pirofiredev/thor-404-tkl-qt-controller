@@ -13,6 +13,8 @@ Native Linux Qt6 & C++20 desktop application to control RGB lighting on the Gene
 - Profiles support
 - Macros editing and per-key-macro assignment
 - "Gaming Mode"
+- More polished UI, some animations
+- KDE's shortcuts integration, maybe has to be in tray with separate dynamic tray icon
 
 
 ## Setup udev Rules (Non-root USB Access)
