@@ -1,4 +1,7 @@
 #include <QApplication>
+#include <QStandardPaths>
+#include <QDir>
+#include <QFile>
 #include <iostream>
 #include <cassert>
 #include "mainwindow.h"
@@ -228,7 +231,41 @@ int main(int argc, char *argv[]) {
     app.setApplicationName("thor-404-controller");
     app.setApplicationDisplayName("Genesis Thor 404 TKL RGB Controller");
     app.setWindowIcon(QIcon(":/resources/genesis-logo.svg"));
-    app.setDesktopFileName("thor-404-controller");
+    app.setDesktopFileName("thor-404-controller.desktop");
+
+    // Ensure desktop entry and icon exist in user's XDG data directory if running uninstalled from build/
+    QString userAppDir = QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation);
+    QDir().mkpath(userAppDir);
+    QString userDesktopFile = userAppDir + "/thor-404-controller.desktop";
+    if (!QFile::exists(userDesktopFile) && !QFile::exists("/usr/share/applications/thor-404-controller.desktop")) {
+        QFile src(":/resources/genesis-logo.svg");
+        QString userIconDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/icons/hicolor/scalable/apps";
+        QDir().mkpath(userIconDir);
+        if (src.open(QIODevice::ReadOnly)) {
+            QFile iconOut(userIconDir + "/thor-404-controller.svg");
+            if (iconOut.open(QIODevice::WriteOnly)) {
+                iconOut.write(src.readAll());
+                iconOut.close();
+            }
+            src.close();
+        }
+
+        QFile df(userDesktopFile);
+        if (df.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QString content =
+                "[Desktop Entry]\n"
+                "Type=Application\n"
+                "Name=Genesis Thor 404 Controller\n"
+                "Comment=Native Linux Controller for Genesis Thor 404 TKL Keyboard\n"
+                "Exec=" + QCoreApplication::applicationFilePath() + "\n"
+                "Icon=thor-404-controller\n"
+                "Terminal=false\n"
+                "Categories=HardwareSettings;Settings;Utility;Qt;\n"
+                "StartupWMClass=thor-404-controller\n";
+            df.write(content.toUtf8());
+            df.close();
+        }
+    }
 
     thor::MainWindow window;
     window.show();

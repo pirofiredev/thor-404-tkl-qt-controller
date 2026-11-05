@@ -60,7 +60,7 @@ cmake --build build -j$(nproc)
 ./build/thor-404-controller --set-effect breathing --speed 8
 ```
 
-## Future Roadmap (Planned Features)
+## Nice-to-have Roadmap (Planned Features)
 1. **Profiles**:
    - Hardware-backed profile switching.
    - Stored in keyboard MCU memory via one-shot feature reports.
