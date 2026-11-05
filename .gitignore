@@ -1,0 +1,34 @@
+# Build and binary artifacts
+build/
+bin/
+lib/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# CMake and build system artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+*.ninja
+.ninja_*
+
+# Qt / IDE generated files
+*.moc
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*.qmlc
+*.jsc
+.vscode/
+.idea/
+*.user
+*.user.*
+.cache/
+*.swp
+*~
