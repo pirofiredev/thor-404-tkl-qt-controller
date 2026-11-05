@@ -2,6 +2,10 @@
 build/
 bin/
 lib/
+releases/
+*.deb
+*.zip
+*.tar.gz
 *.o
 *.a
 *.so

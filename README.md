@@ -15,10 +15,10 @@ Comprehensive Linux Qt6 & C++20 controller for Genesis Thor 404 TKL keyboard (an
 
 ## Installation via `.deb` (Recommended)
 
-Download the `.deb` release package from `releases/v1/thor-404-controller_1.0.0_amd64.deb` or install directly:
+Download the `.deb` release package from GitHub Releases or build your own:
 
 ```bash
-sudo apt install ./releases/v1/thor-404-controller_1.0.0_amd64.deb
+sudo apt install ./build/thor-404-controller-1.0.0-Linux.deb
 ```
 
 When installed via `apt`:
