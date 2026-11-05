@@ -1,16 +1,19 @@
-# Genesis Thor 404 TKL RGB Controller (Linux)
+# Genesis Thor 404 TKL RGB Controller (Linux). Made with AI support.
 
-Native Linux Qt6/C++20 desktop application to control RGB lighting on the Genesis Thor 404 TKL keyboard (and compatible Genesis boards). Built with Qt Widgets to automatically inherit the native KDE Plasma / Breeze dark theme without heavy stylesheets.
+Native Linux Qt6 & C++20 desktop application to control RGB lighting on the Genesis Thor 404 TKL keyboard (and compatible Genesis boards **for further integration**). Reused some parts from https://github.com/rrivvi/thor-404-controller/tree/main
 
 ## Features
-- Hardware support for Genesis Thor 404 TKL (`0x331A:0x501B` and `0x331A:0x501C`).
-- Communication via `hidapi-hidraw` (no root required with udev rules).
-- Connection status badge (Connected / Disconnected) with dynamic auto-detection.
+- Hardware support for Genesis Thor 404 TKL (`0x331A:0x501B` and `0x331A:0x501C`). **Create an issue if your 404 TKL was not recognized**.
 - Preset lighting effects: Static, Breathing, Neon, Wave, Off.
 - Color picker dialog (`QColorDialog`) with dynamic color preview swatch.
 - Brightness (1–16), Speed (1–16), Direction (Right, Left, Up, Down), and Rainbow toggles.
-- Handshake and finalize sequence with 8ms write pacing.
-- Built-in assert-based packet framing validation (`--test-framing`).
+
+
+## What's missing
+- Profiles support
+- Macros editing and per-key-macro assignment
+- "Gaming Mode"
+
 
 ## Setup udev Rules (Non-root USB Access)
 Copy `99-genesis-thor.rules` to `/etc/udev/rules.d/` and reload udev:
