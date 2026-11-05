@@ -185,6 +185,7 @@ void MqttLightService::publishState(bool power, uint8_t brightness, const QColor
     QJsonObject state;
     state["state"] = power ? "ON" : "OFF";
     state["brightness"] = brightness;
+    state["color_mode"] = "rgb";
     QJsonObject rgb;
     rgb["r"] = color.red();
     rgb["g"] = color.green();

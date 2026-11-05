@@ -25,8 +25,6 @@ add_executable(thor-404-controller
     src/mainwindow.cpp
     src/mqttservice.h
     src/mqttservice.cpp
-    src/sysfsledservice.h
-    src/sysfsledservice.cpp
     src/interactivekeyboardwidget.h
     src/interactivekeyboardwidget.cpp
     resources.qrc

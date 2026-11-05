@@ -35,16 +35,19 @@ public:
     ~InteractiveKeyboardWidget() override = default;
 
     void setMode(Mode mode);
+    void setInteractive(bool enabled) { m_isInteractive = enabled; }
+    bool isInteractive() const { return m_isInteractive; }
     void setCurrentBrushColor(const QColor &color);
     void setAllKeysColor(const QColor &color);
+    void setRainbowEffect();
     void setKeyColor(const std::string &keyId, const QColor &color);
 
     std::map<std::string, QColor> getKeyColors() const;
     void setSelectedKey(const std::string &keyId);
     std::string getSelectedKeyId() const;
 
-    QSize sizeHint() const override { return QSize(600, 220); }
-    QSize minimumSizeHint() const override { return QSize(480, 180); }
+    QSize sizeHint() const override { return QSize(700, 250); }
+    QSize minimumSizeHint() const override { return QSize(640, 230); }
 
 signals:
     void keySelected(const QString &keyName, uint8_t scancode);
@@ -63,6 +66,7 @@ private:
 
     std::vector<KeyVisual> m_keys;
     Mode m_mode{Mode::ColorPicker};
+    bool m_isInteractive{true};
     QColor m_brushColor{255, 0, 0};
     bool m_isDragging{false};
     std::string m_lastSelectedKeyId;

@@ -7,7 +7,6 @@
 #include <memory>
 #include "devicemanager.h"
 #include "mqttservice.h"
-#include "sysfsledservice.h"
 #include "interactivekeyboardwidget.h"
 
 class QLabel;
@@ -19,6 +18,7 @@ class QTimer;
 class QTabWidget;
 class QLineEdit;
 class QSpinBox;
+class QFormLayout;
 
 namespace thor {
 
@@ -54,7 +54,6 @@ private:
 
     DeviceManager m_deviceManager;
     MqttLightService m_mqttService;
-    SysfsLedService m_sysfsLedService;
 
     QColor m_selectedColor{255, 0, 0}; // default red
     QSystemTrayIcon *m_trayIcon{nullptr};
@@ -86,9 +85,10 @@ private:
     QPushButton *m_fillAllBtn{nullptr};
     QPushButton *m_applyCustomBtn{nullptr};
     QComboBox *m_effectCombo{nullptr};
+    QFormLayout *m_lightingFormLayout{nullptr};
+    QWidget *m_colorContainer{nullptr};
     QPushButton *m_colorBtn{nullptr};
     QCheckBox *m_multicolorCheck{nullptr};
-    QWidget *m_colorContainer{nullptr};
     QWidget *m_brightnessContainer{nullptr};
     QSlider *m_brightnessSlider{nullptr};
     QLabel *m_brightnessValLabel{nullptr};
@@ -107,7 +107,6 @@ private:
     QCheckBox *m_mqttAutoConnectCheck{nullptr};
     QPushButton *m_mqttConnectBtn{nullptr};
     QLabel *m_mqttStatusLabel{nullptr};
-    QLabel *m_kdeLedStatusLabel{nullptr};
 
     // Autostart Setting
     QCheckBox *m_autostartCheck{nullptr};

@@ -8,7 +8,8 @@ namespace thor {
 
 InteractiveKeyboardWidget::InteractiveKeyboardWidget(QWidget *parent)
     : QWidget(parent) {
-    setMinimumSize(540, 200);
+    setMinimumSize(640, 230);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     setMouseTracking(true);
     initIso88Layout();
 }
@@ -25,6 +26,17 @@ void InteractiveKeyboardWidget::setCurrentBrushColor(const QColor &color) {
 void InteractiveKeyboardWidget::setAllKeysColor(const QColor &color) {
     for (auto &k : m_keys) {
         k.color = color;
+    }
+    update();
+    emit keyColorsChanged();
+}
+
+void InteractiveKeyboardWidget::setRainbowEffect() {
+    for (auto &k : m_keys) {
+        // Compute hue across keyboard width (0.0 to 18.25)
+        double ratio = std::clamp(k.rect.x() / 18.25, 0.0, 1.0);
+        int hue = static_cast<int>(ratio * 359.0);
+        k.color = QColor::fromHsv(hue, 240, 255);
     }
     update();
     emit keyColorsChanged();
@@ -188,11 +200,11 @@ void InteractiveKeyboardWidget::initIso88Layout() {
 }
 
 int InteractiveKeyboardWidget::findKeyAt(const QPointF &pos) const {
-    double scaleX = (width() - 20.0) / 18.5;
-    double scaleY = (height() - 20.0) / 6.6;
-    double unit = std::min(scaleX, scaleY);
-    double offsetX = (width() - 18.5 * unit) / 2.0;
-    double offsetY = (height() - 6.6 * unit) / 2.0;
+    double scaleX = (width() - 28.0) / 18.5;
+    double scaleY = (height() - 28.0) / 6.6;
+    double unit = std::max(12.0, std::min(scaleX, scaleY));
+    double offsetX = std::max(14.0, (width() - 18.5 * unit) / 2.0);
+    double offsetY = std::max(14.0, (height() - 6.6 * unit) / 2.0);
 
     for (size_t i = 0; i < m_keys.size(); ++i) {
         QRectF r(offsetX + m_keys[i].rect.x() * unit,
@@ -215,6 +227,9 @@ void InteractiveKeyboardWidget::applyBrushToKey(int index) {
 }
 
 void InteractiveKeyboardWidget::mousePressEvent(QMouseEvent *event) {
+    if (!m_isInteractive) {
+        return;
+    }
     if (event->button() == Qt::LeftButton) {
         m_isDragging = true;
         int idx = findKeyAt(event->position());
@@ -230,6 +245,9 @@ void InteractiveKeyboardWidget::mousePressEvent(QMouseEvent *event) {
 }
 
 void InteractiveKeyboardWidget::mouseMoveEvent(QMouseEvent *event) {
+    if (!m_isInteractive) {
+        return;
+    }
     if (m_isDragging && (event->buttons() & Qt::LeftButton)) {
         int idx = findKeyAt(event->position());
         if (idx >= 0) {
@@ -241,6 +259,10 @@ void InteractiveKeyboardWidget::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void InteractiveKeyboardWidget::mouseReleaseEvent(QMouseEvent *event) {
+    if (!m_isInteractive) {
+        m_isDragging = false;
+        return;
+    }
     if (event->button() == Qt::LeftButton) {
         m_isDragging = false;
     }
@@ -250,12 +272,12 @@ void InteractiveKeyboardWidget::paintEvent(QPaintEvent *) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
-    // Calculate layout scaling
-    double scaleX = (width() - 20.0) / 18.5;
-    double scaleY = (height() - 20.0) / 6.6;
-    double unit = std::min(scaleX, scaleY);
-    double offsetX = (width() - 18.5 * unit) / 2.0;
-    double offsetY = (height() - 6.6 * unit) / 2.0;
+    // Calculate layout scaling with safe padding
+    double scaleX = (width() - 28.0) / 18.5;
+    double scaleY = (height() - 28.0) / 6.6;
+    double unit = std::max(12.0, std::min(scaleX, scaleY));
+    double offsetX = std::max(14.0, (width() - 18.5 * unit) / 2.0);
+    double offsetY = std::max(14.0, (height() - 6.6 * unit) / 2.0);
 
     // Draw keyboard base bezel
     QRectF baseRect(offsetX - 6, offsetY - 6, 18.5 * unit + 12, 6.6 * unit + 12);

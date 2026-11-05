@@ -31,8 +31,8 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
     setWindowTitle(tr("Genesis Thor 404 TKL"));
     setWindowIcon(QIcon(":/resources/genesis-logo.svg"));
-    resize(520, 590);
-    setMinimumWidth(460);
+    resize(740, 620);
+    setMinimumWidth(680);
 
     // Initialize default quick action slots:
     // Slot 1: Static Red, Slot 2: Static Blue, Slot 3: Wave Rainbow
@@ -45,6 +45,22 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Connect Home Assistant MQTT apply callback
     m_mqttService.setApplyCallback([this](const EffectConfig &cfg) {
+        // Sync local GUI controls with Home Assistant
+        m_selectedColor = QColor(cfg.r, cfg.g, cfg.b);
+        updateSwatch();
+        if (m_lightingVisualizer) {
+            m_lightingVisualizer->setCurrentBrushColor(m_selectedColor);
+            m_lightingVisualizer->setAllKeysColor(m_selectedColor);
+        }
+        if (m_brightnessSlider) {
+            m_brightnessSlider->setValue(cfg.brightness);
+        }
+        if (m_effectCombo) {
+            int idx = m_effectCombo->findData(static_cast<int>(cfg.effect));
+            if (idx >= 0) {
+                m_effectCombo->setCurrentIndex(idx);
+            }
+        }
         applyConfig(cfg);
     });
 
@@ -82,25 +98,6 @@ MainWindow::MainWindow(QWidget *parent)
         m_mqttService.start(savedHost, static_cast<quint16>(savedPort), savedUser, savedPass);
         m_mqttStatusLabel->setText(tr("Auto-connecting to %1:%2...").arg(savedHost).arg(savedPort));
     }
-
-    // Connect KDE virtual sysfs LED brightness callback
-    m_sysfsLedService.setBrightnessCallback([this](uint8_t brightness) {
-        if (m_brightnessSlider) {
-            m_brightnessSlider->setValue(brightness);
-        }
-        EffectConfig cfg;
-        cfg.effect = static_cast<EffectId>(m_effectCombo->currentData().toInt());
-        cfg.r = static_cast<uint8_t>(m_selectedColor.red());
-        cfg.g = static_cast<uint8_t>(m_selectedColor.green());
-        cfg.b = static_cast<uint8_t>(m_selectedColor.blue());
-        cfg.multicolor = m_multicolorCheck->isChecked();
-        cfg.brightness = brightness;
-        cfg.speed = static_cast<uint8_t>(m_speedSlider->value());
-        cfg.direction = static_cast<Direction>(m_directionCombo->currentData().toInt());
-        applyConfig(cfg);
-    });
-
-    m_sysfsLedService.start("genesis_thor404::kbd_backlight");
 
     m_pollTimer = new QTimer(this);
     connect(m_pollTimer, &QTimer::timeout, this, &MainWindow::onRefreshDevices);
@@ -165,8 +162,8 @@ void MainWindow::setupUi() {
     lightingLayout->setContentsMargins(12, 12, 12, 12);
     lightingLayout->setSpacing(12);
 
-    auto *form = new QFormLayout();
-    form->setSpacing(10);
+    m_lightingFormLayout = new QFormLayout();
+    m_lightingFormLayout->setSpacing(10);
 
     // Effect
     m_effectCombo = new QComboBox(lightingTab);
@@ -189,7 +186,7 @@ void MainWindow::setupUi() {
     m_effectCombo->addItem(tr("Off"), static_cast<int>(EffectId::Off));
     connect(m_effectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onEffectChanged);
-    form->addRow(tr("Effect:"), m_effectCombo);
+    m_lightingFormLayout->addRow(tr("Effect:"), m_effectCombo);
 
     // Interactive Keyboard Visualizer
     m_lightingVisualizer = new InteractiveKeyboardWidget(lightingTab);
@@ -236,9 +233,21 @@ void MainWindow::setupUi() {
     connect(m_colorBtn, &QPushButton::clicked, this, &MainWindow::onPickColor);
 
     m_multicolorCheck = new QCheckBox(tr("Multicolor / Rainbow"), m_colorContainer);
+    connect(m_multicolorCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        if (m_lightingVisualizer) {
+            auto eff = static_cast<EffectId>(m_effectCombo->currentData().toInt());
+            if (eff != EffectId::Custom && eff != EffectId::Off) {
+                if (checked) {
+                    m_lightingVisualizer->setRainbowEffect();
+                } else {
+                    m_lightingVisualizer->setAllKeysColor(m_selectedColor);
+                }
+            }
+        }
+    });
     colorRowLayout->addWidget(m_colorBtn);
     colorRowLayout->addWidget(m_multicolorCheck);
-    form->addRow(tr("Color:"), m_colorContainer);
+    m_lightingFormLayout->addRow(tr("Color:"), m_colorContainer);
 
     // Brightness slider (1 - 16)
     m_brightnessContainer = new QWidget(lightingTab);
@@ -254,7 +263,7 @@ void MainWindow::setupUi() {
     });
     brightLayout->addWidget(m_brightnessSlider);
     brightLayout->addWidget(m_brightnessValLabel);
-    form->addRow(tr("Brightness:"), m_brightnessContainer);
+    m_lightingFormLayout->addRow(tr("Brightness:"), m_brightnessContainer);
 
     // Speed slider (1 - 16)
     m_speedContainer = new QWidget(lightingTab);
@@ -270,7 +279,7 @@ void MainWindow::setupUi() {
     });
     speedLayout->addWidget(m_speedSlider);
     speedLayout->addWidget(m_speedValLabel);
-    form->addRow(tr("Speed:"), m_speedContainer);
+    m_lightingFormLayout->addRow(tr("Speed:"), m_speedContainer);
 
     // Direction dropdown
     m_directionContainer = new QWidget(lightingTab);
@@ -282,9 +291,9 @@ void MainWindow::setupUi() {
     m_directionCombo->addItem(tr("Up"), static_cast<int>(Direction::Up));
     m_directionCombo->addItem(tr("Down"), static_cast<int>(Direction::Down));
     dirLayout->addWidget(m_directionCombo);
-    form->addRow(tr("Direction:"), m_directionContainer);
+    m_lightingFormLayout->addRow(tr("Direction:"), m_directionContainer);
 
-    lightingLayout->addLayout(form);
+    lightingLayout->addLayout(m_lightingFormLayout);
 
     m_applyBtn = new QPushButton(tr("Apply Lighting"), lightingTab);
     m_applyBtn->setDefault(true);
@@ -293,6 +302,9 @@ void MainWindow::setupUi() {
     lightingLayout->addWidget(m_applyBtn);
 
     m_tabs->addTab(lightingTab, tr("Lighting"));
+
+    // Trigger initial visibility state for default selected effect (Static)
+    onEffectChanged(m_effectCombo->currentIndex());
 
     // TAB 2: Integrations & Background Services
     auto *integrationTab = new QWidget();
@@ -311,14 +323,6 @@ void MainWindow::setupUi() {
     connect(m_autostartCheck, &QCheckBox::toggled, this, &MainWindow::updateAutostart);
     sysLayout->addWidget(m_autostartCheck);
     integLayout->addWidget(sysGroup);
-
-    // KDE Brightness
-    auto *kdeGroup = new QGroupBox(tr("KDE Plasma Native Brightness Applet"), integrationTab);
-    auto *kdeLayout = new QVBoxLayout(kdeGroup);
-    m_kdeLedStatusLabel = new QLabel(tr("Active sysfs virtual interface:<br><code>$XDG_RUNTIME_DIR/genesis_thor404::kbd_backlight.brightness</code><br>Controlled directly by KDE PowerDevil slider & shortcuts."), kdeGroup);
-    m_kdeLedStatusLabel->setWordWrap(true);
-    kdeLayout->addWidget(m_kdeLedStatusLabel);
-    integLayout->addWidget(kdeGroup);
 
     // Home Assistant MQTT
     auto *haGroup = new QGroupBox(tr("Home Assistant MQTT Discovery"), integrationTab);
@@ -714,32 +718,33 @@ void MainWindow::onEffectChanged(int) {
     bool hasSpeed = (!isOff && !isStatic && !isCustom);
     bool hasMulticolor = (!isOff && !isStatic && !isCustom);
 
+    // Only allow clicking/dragging individual key colors when in Custom mode
+    if (m_lightingVisualizer) {
+        m_lightingVisualizer->setInteractive(isCustom);
+
+        if (isOff) {
+            m_lightingVisualizer->setAllKeysColor(QColor(0, 0, 0));
+        } else if (eff == EffectId::Rainbow || eff == EffectId::Spectrum || eff == EffectId::Colourful
+                   || (m_multicolorCheck && m_multicolorCheck->isChecked())) {
+            m_lightingVisualizer->setRainbowEffect();
+        } else if (!isCustom) {
+            m_lightingVisualizer->setAllKeysColor(m_selectedColor);
+        }
+    }
+
     // Show custom actions (Fill All, WASD, Arrows) only in Custom mode
     if (m_customActionsContainer) {
         m_customActionsContainer->setVisible(isCustom);
     }
 
-    // Color picker
-    if (m_colorContainer) {
-        m_colorContainer->setVisible(!isOff);
-    }
-    if (m_multicolorCheck) {
-        m_multicolorCheck->setVisible(hasMulticolor);
-    }
-
-    // Brightness
-    if (m_brightnessContainer) {
-        m_brightnessContainer->setVisible(!isOff);
-    }
-
-    // Speed
-    if (m_speedContainer) {
-        m_speedContainer->setVisible(hasSpeed);
-    }
-
-    // Direction
-    if (m_directionContainer) {
-        m_directionContainer->setVisible(hasDirection);
+    if (m_lightingFormLayout) {
+        m_lightingFormLayout->setRowVisible(m_colorContainer, !isOff);
+        if (m_multicolorCheck) {
+            m_multicolorCheck->setVisible(hasMulticolor);
+        }
+        m_lightingFormLayout->setRowVisible(m_brightnessContainer, !isOff);
+        m_lightingFormLayout->setRowVisible(m_speedContainer, hasSpeed);
+        m_lightingFormLayout->setRowVisible(m_directionContainer, hasDirection);
     }
 }
 
@@ -750,6 +755,14 @@ void MainWindow::onPickColor() {
         updateSwatch();
         if (m_lightingVisualizer) {
             m_lightingVisualizer->setCurrentBrushColor(m_selectedColor);
+            auto eff = static_cast<EffectId>(m_effectCombo->currentData().toInt());
+            if (eff != EffectId::Custom && eff != EffectId::Off) {
+                if (m_multicolorCheck && m_multicolorCheck->isChecked()) {
+                    m_lightingVisualizer->setRainbowEffect();
+                } else {
+                    m_lightingVisualizer->setAllKeysColor(m_selectedColor);
+                }
+            }
         }
     }
 }
@@ -771,7 +784,6 @@ void MainWindow::applyConfig(const EffectConfig &cfg) {
         if (m_msgLabel) m_msgLabel->setText(tr("Settings applied successfully!"));
         m_mqttService.publishState(cfg.effect != EffectId::Off, cfg.brightness,
                                    QColor(cfg.r, cfg.g, cfg.b), "active");
-        m_sysfsLedService.updateBrightness(cfg.brightness);
     } else {
         if (m_msgLabel) m_msgLabel->setText(tr("Failed to apply settings: %1").arg(QString::fromStdString(err)));
     }
