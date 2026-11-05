@@ -296,4 +296,48 @@ bool DeviceManager::applyEffect(const EffectConfig& config, std::string* errorMe
     return true;
 }
 
+bool DeviceManager::setProfile(uint8_t profileIndex, std::string* errorMessage) {
+    if (!m_handle) {
+        if (errorMessage) *errorMessage = "Device not connected";
+        return false;
+    }
+
+    // Profile switch packet: Report ID 0x00, Payload 0x04 0x20 [profileIndex: 0-2]
+    PacketBuffer buf{};
+    buf[0] = 0x00;
+    buf[1] = 0x04;
+    buf[2] = 0x20;
+    buf[3] = std::clamp<uint8_t>(profileIndex, 0, 2);
+
+    if (!sendFeatureReport(buf)) {
+        if (errorMessage) *errorMessage = "Failed to switch hardware profile";
+        return false;
+    }
+    return true;
+}
+
+bool DeviceManager::assignKeyMacro(uint8_t keyIndex, const std::vector<uint8_t>& scancodes, std::string* errorMessage) {
+    if (!m_handle) {
+        if (errorMessage) *errorMessage = "Device not connected";
+        return false;
+    }
+
+    // Direct hardware macro assignment packet: Report ID 0x00, Payload 0x04 0x30 [keyIndex] [scancodes...]
+    PacketBuffer buf{};
+    buf[0] = 0x00;
+    buf[1] = 0x04;
+    buf[2] = 0x30;
+    buf[3] = keyIndex;
+    buf[4] = static_cast<uint8_t>(std::min<size_t>(scancodes.size(), 50));
+    for (size_t i = 0; i < buf[4]; ++i) {
+        buf[5 + i] = scancodes[i];
+    }
+
+    if (!sendFeatureReport(buf)) {
+        if (errorMessage) *errorMessage = "Failed to write macro to keyboard memory";
+        return false;
+    }
+    return true;
+}
+
 } // namespace thor

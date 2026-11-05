@@ -133,6 +133,22 @@ int main(int argc, char *argv[]) {
         } else if (arg == "--list-devices") {
             listDevs = true;
             cliMode = true;
+        } else if (arg == "--profile" && i + 1 < argc) {
+            cliMode = true;
+            int prof = std::stoi(argv[++i]);
+            DeviceManager dm;
+            dm.setDebug(debug);
+            if (!dm.openDevice(0)) {
+                std::cerr << "Failed to open device.\n";
+                return 1;
+            }
+            std::string err;
+            if (!dm.setProfile(static_cast<uint8_t>(prof), &err)) {
+                std::cerr << "Profile switch failed: " << err << "\n";
+                return 1;
+            }
+            std::cout << "Profile switched to " << prof << "\n";
+            return 0;
         } else if (arg == "--set-static" && i + 3 < argc) {
             cliMode = true;
             cfg.effect = EffectId::Static;

@@ -13,16 +13,47 @@
 #include <QTimer>
 #include <QPixmap>
 #include <QPainter>
+#include <QMenu>
+#include <QAction>
+#include <QTabWidget>
+#include <QLineEdit>
+#include <QSpinBox>
+#include <QEvent>
 
 namespace thor {
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
-    setWindowTitle(tr("Genesis Thor 404 TKL RGB Controller"));
-    resize(480, 520);
-    setMinimumWidth(420);
+    setWindowTitle(tr("Genesis Thor 404 TKL"));
+    resize(520, 560);
+    setMinimumWidth(460);
 
     setupUi();
+    setupTray();
+
+    // Connect Home Assistant MQTT apply callback
+    m_mqttService.setApplyCallback([this](const EffectConfig &cfg) {
+        applyConfig(cfg);
+    });
+
+    // Connect KDE virtual sysfs LED brightness callback
+    m_sysfsLedService.setBrightnessCallback([this](uint8_t brightness) {
+        if (m_brightnessSlider) {
+            m_brightnessSlider->setValue(brightness);
+        }
+        EffectConfig cfg;
+        cfg.effect = static_cast<EffectId>(m_effectCombo->currentData().toInt());
+        cfg.r = static_cast<uint8_t>(m_selectedColor.red());
+        cfg.g = static_cast<uint8_t>(m_selectedColor.green());
+        cfg.b = static_cast<uint8_t>(m_selectedColor.blue());
+        cfg.multicolor = m_multicolorCheck->isChecked();
+        cfg.brightness = brightness;
+        cfg.speed = static_cast<uint8_t>(m_speedSlider->value());
+        cfg.direction = static_cast<Direction>(m_directionCombo->currentData().toInt());
+        applyConfig(cfg);
+    });
+
+    m_sysfsLedService.start("genesis_thor404::kbd_backlight");
 
     m_pollTimer = new QTimer(this);
     connect(m_pollTimer, &QTimer::timeout, this, &MainWindow::onRefreshDevices);
@@ -31,44 +62,67 @@ MainWindow::MainWindow(QWidget *parent)
     onRefreshDevices();
 }
 
+void MainWindow::closeEvent(QCloseEvent *event) {
+    // Minimize to tray on close to maintain background services (KDE applet, MQTT)
+    if (m_trayIcon && m_trayIcon->isVisible()) {
+        hide();
+        event->ignore();
+    } else {
+        event->accept();
+    }
+}
+
+void MainWindow::changeEvent(QEvent *event) {
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::ApplicationPaletteChange) {
+        updateTrayIcon();
+        updateSwatch();
+    }
+    QMainWindow::changeEvent(event);
+}
+
 void MainWindow::setupUi() {
     auto *central = new QWidget(this);
     setCentralWidget(central);
 
     auto *mainLayout = new QVBoxLayout(central);
-    mainLayout->setContentsMargins(16, 16, 16, 16);
+    mainLayout->setContentsMargins(18, 18, 18, 18);
     mainLayout->setSpacing(14);
 
-    // Message / Error label
-    m_msgLabel = new QLabel(central);
-    m_msgLabel->setAlignment(Qt::AlignCenter);
-    m_msgLabel->setWordWrap(true);
+    // Header: Status Card (JamesDSP style clean top-bar)
+    auto *topCard = new QGroupBox(this);
+    auto *topLayout = new QHBoxLayout(topCard);
+    topLayout->setContentsMargins(12, 10, 12, 10);
 
-    // 1. Device status and model selection
-    auto *deviceGroup = new QGroupBox(tr("Device Connection"), central);
-    auto *deviceLayout = new QFormLayout(deviceGroup);
+    m_statusBadge = new QLabel(topCard);
+    m_statusBadge->setFrameShape(QFrame::NoFrame);
+    m_statusBadge->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
-    m_statusBadge = new QLabel(deviceGroup);
-    m_statusBadge->setFrameShape(QFrame::StyledPanel);
-    m_statusBadge->setAlignment(Qt::AlignCenter);
-
-    m_modelCombo = new QComboBox(deviceGroup);
+    m_modelCombo = new QComboBox(topCard);
     m_modelCombo->addItem(tr("Auto-detect"), 0);
     m_modelCombo->addItem(tr("Genesis Thor 404 TKL (0x501B)"), static_cast<int>(PID_VARIANT_A));
     m_modelCombo->addItem(tr("Genesis Thor 404 TKL (0x501C)"), static_cast<int>(PID_VARIANT_B));
     connect(m_modelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onModelSelected);
 
-    deviceLayout->addRow(tr("Status:"), m_statusBadge);
-    deviceLayout->addRow(tr("Model:"), m_modelCombo);
-    mainLayout->addWidget(deviceGroup);
+    topLayout->addWidget(m_statusBadge, 1);
+    topLayout->addWidget(new QLabel(tr("Model:"), topCard));
+    topLayout->addWidget(m_modelCombo);
+    mainLayout->addWidget(topCard);
 
-    // 2. Lighting configuration
-    auto *lightingGroup = new QGroupBox(tr("Lighting Settings"), central);
-    auto *form = new QFormLayout(lightingGroup);
+    // Tab Widget (JamesDSP card tabs)
+    m_tabs = new QTabWidget(central);
+
+    // TAB 1: Lighting
+    auto *lightingTab = new QWidget();
+    auto *lightingLayout = new QVBoxLayout(lightingTab);
+    lightingLayout->setContentsMargins(12, 12, 12, 12);
+    lightingLayout->setSpacing(12);
+
+    auto *form = new QFormLayout();
+    form->setSpacing(10);
 
     // Effect
-    m_effectCombo = new QComboBox(lightingGroup);
+    m_effectCombo = new QComboBox(lightingTab);
     m_effectCombo->addItem(tr("Static"), static_cast<int>(EffectId::Static));
     m_effectCombo->addItem(tr("Breathing"), static_cast<int>(EffectId::Breathing));
     m_effectCombo->addItem(tr("Neon"), static_cast<int>(EffectId::Neon));
@@ -84,29 +138,28 @@ void MainWindow::setupUi() {
     m_effectCombo->addItem(tr("Shuttle"), static_cast<int>(EffectId::Shuttle));
     m_effectCombo->addItem(tr("Shockwave"), static_cast<int>(EffectId::Shockwave));
     m_effectCombo->addItem(tr("Explosion"), static_cast<int>(EffectId::Explosion));
-    m_effectCombo->addItem(tr("Escape Beam"), static_cast<int>(EffectId::EscapeBeam));
     m_effectCombo->addItem(tr("Off"), static_cast<int>(EffectId::Off));
     connect(m_effectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onEffectChanged);
     form->addRow(tr("Effect:"), m_effectCombo);
 
-    // Color picker button & rainbow toggle
+    // Color picker
     auto *colorRowLayout = new QHBoxLayout();
-    m_colorBtn = new QPushButton(tr("Select Color..."), lightingGroup);
+    m_colorBtn = new QPushButton(tr("Select Color..."), lightingTab);
     updateSwatch();
     connect(m_colorBtn, &QPushButton::clicked, this, &MainWindow::onPickColor);
 
-    m_multicolorCheck = new QCheckBox(tr("Rainbow / Multicolor"), lightingGroup);
+    m_multicolorCheck = new QCheckBox(tr("Multicolor / Rainbow"), lightingTab);
     colorRowLayout->addWidget(m_colorBtn);
     colorRowLayout->addWidget(m_multicolorCheck);
     form->addRow(tr("Color:"), colorRowLayout);
 
     // Brightness slider (1 - 16)
     auto *brightLayout = new QHBoxLayout();
-    m_brightnessSlider = new QSlider(Qt::Horizontal, lightingGroup);
+    m_brightnessSlider = new QSlider(Qt::Horizontal, lightingTab);
     m_brightnessSlider->setRange(1, 16);
     m_brightnessSlider->setValue(16);
-    m_brightnessValLabel = new QLabel(QString::number(m_brightnessSlider->value()), lightingGroup);
+    m_brightnessValLabel = new QLabel(QString::number(m_brightnessSlider->value()), lightingTab);
     m_brightnessValLabel->setFixedWidth(24);
     connect(m_brightnessSlider, &QSlider::valueChanged, this, [this](int val) {
         m_brightnessValLabel->setText(QString::number(val));
@@ -117,10 +170,10 @@ void MainWindow::setupUi() {
 
     // Speed slider (1 - 16)
     auto *speedLayout = new QHBoxLayout();
-    m_speedSlider = new QSlider(Qt::Horizontal, lightingGroup);
+    m_speedSlider = new QSlider(Qt::Horizontal, lightingTab);
     m_speedSlider->setRange(1, 16);
     m_speedSlider->setValue(16);
-    m_speedValLabel = new QLabel(QString::number(m_speedSlider->value()), lightingGroup);
+    m_speedValLabel = new QLabel(QString::number(m_speedSlider->value()), lightingTab);
     m_speedValLabel->setFixedWidth(24);
     connect(m_speedSlider, &QSlider::valueChanged, this, [this](int val) {
         m_speedValLabel->setText(QString::number(val));
@@ -130,24 +183,217 @@ void MainWindow::setupUi() {
     form->addRow(tr("Speed:"), speedLayout);
 
     // Direction dropdown
-    m_directionCombo = new QComboBox(lightingGroup);
+    m_directionCombo = new QComboBox(lightingTab);
     m_directionCombo->addItem(tr("Right"), static_cast<int>(Direction::Right));
     m_directionCombo->addItem(tr("Left"), static_cast<int>(Direction::Left));
     m_directionCombo->addItem(tr("Up"), static_cast<int>(Direction::Up));
     m_directionCombo->addItem(tr("Down"), static_cast<int>(Direction::Down));
     form->addRow(tr("Direction:"), m_directionCombo);
 
-    mainLayout->addWidget(lightingGroup);
-    mainLayout->addWidget(m_msgLabel);
+    lightingLayout->addLayout(form);
 
-    // Apply button
-    m_applyBtn = new QPushButton(tr("Apply"), central);
+    m_applyBtn = new QPushButton(tr("Apply Lighting"), lightingTab);
     m_applyBtn->setDefault(true);
     m_applyBtn->setFixedHeight(36);
     connect(m_applyBtn, &QPushButton::clicked, this, &MainWindow::onApply);
-    mainLayout->addWidget(m_applyBtn);
+    lightingLayout->addWidget(m_applyBtn);
+
+    m_tabs->addTab(lightingTab, tr("Lighting"));
+
+    // TAB 2: Profiles & Hardware Macros
+    auto *profileTab = new QWidget();
+    auto *profileLayout = new QVBoxLayout(profileTab);
+    profileLayout->setContentsMargins(12, 12, 12, 12);
+    profileLayout->setSpacing(14);
+
+    auto *profGroup = new QGroupBox(tr("Hardware Profiles (Onboard Memory)"), profileTab);
+    auto *profForm = new QFormLayout(profGroup);
+    m_profileCombo = new QComboBox(profGroup);
+    m_profileCombo->addItem(tr("Profile 1 (Default / Gaming)"), 0);
+    m_profileCombo->addItem(tr("Profile 2 (Work / Productivity)"), 1);
+    m_profileCombo->addItem(tr("Profile 3 (Custom)"), 2);
+    m_applyProfileBtn = new QPushButton(tr("Switch Profile"), profGroup);
+    connect(m_applyProfileBtn, &QPushButton::clicked, this, [this]() {
+        onProfileSelected(m_profileCombo->currentIndex());
+    });
+    profForm->addRow(tr("Select Profile:"), m_profileCombo);
+    profForm->addRow("", m_applyProfileBtn);
+    profileLayout->addWidget(profGroup);
+
+    auto *macroGroup = new QGroupBox(tr("Direct Hardware Key Macro Assignment"), profileTab);
+    auto *macroForm = new QFormLayout(macroGroup);
+    m_macroKeyCombo = new QComboBox(macroGroup);
+    m_macroKeyCombo->addItem(tr("F1"), 0x3A);
+    m_macroKeyCombo->addItem(tr("F2"), 0x3B);
+    m_macroKeyCombo->addItem(tr("F3"), 0x3C);
+    m_macroKeyCombo->addItem(tr("F4"), 0x3D);
+    m_macroKeyCombo->addItem(tr("G (Macro Key)"), 0x0A);
+    m_macroKeyCombo->addItem(tr("Insert"), 0x49);
+    m_macroKeyCombo->addItem(tr("Home"), 0x4A);
+    m_macroKeyCombo->addItem(tr("Page Up"), 0x4B);
+
+    m_macroInput = new QLineEdit(macroGroup);
+    m_macroInput->setPlaceholderText(tr("Key sequence or text (e.g. GG WP)"));
+
+    m_assignMacroBtn = new QPushButton(tr("Flash Macro into Keyboard"), macroGroup);
+    connect(m_assignMacroBtn, &QPushButton::clicked, this, &MainWindow::onAssignMacro);
+
+    macroForm->addRow(tr("Target Key:"), m_macroKeyCombo);
+    macroForm->addRow(tr("Sequence:"), m_macroInput);
+    macroForm->addRow("", m_assignMacroBtn);
+    profileLayout->addWidget(macroGroup);
+
+    profileLayout->addStretch(1);
+    m_tabs->addTab(profileTab, tr("Profiles & Macros"));
+
+    // TAB 3: Integrations & Background Services
+    auto *integrationTab = new QWidget();
+    auto *integLayout = new QVBoxLayout(integrationTab);
+    integLayout->setContentsMargins(12, 12, 12, 12);
+    integLayout->setSpacing(14);
+
+    // KDE Brightness
+    auto *kdeGroup = new QGroupBox(tr("KDE Plasma Native Brightness Applet"), integrationTab);
+    auto *kdeLayout = new QVBoxLayout(kdeGroup);
+    m_kdeLedStatusLabel = new QLabel(tr("Active sysfs virtual interface:<br><code>$XDG_RUNTIME_DIR/genesis_thor404::kbd_backlight.brightness</code><br>Controlled directly by KDE PowerDevil slider & shortcuts."), kdeGroup);
+    m_kdeLedStatusLabel->setWordWrap(true);
+    kdeLayout->addWidget(m_kdeLedStatusLabel);
+    integLayout->addWidget(kdeGroup);
+
+    // Home Assistant MQTT
+    auto *haGroup = new QGroupBox(tr("Home Assistant MQTT Discovery"), integrationTab);
+    auto *haForm = new QFormLayout(haGroup);
+
+    m_mqttHostInput = new QLineEdit("127.0.0.1", haGroup);
+    m_mqttPortInput = new QSpinBox(haGroup);
+    m_mqttPortInput->setRange(1, 65535);
+    m_mqttPortInput->setValue(1883);
+    m_mqttUserInput = new QLineEdit(haGroup);
+    m_mqttUserInput->setPlaceholderText(tr("Optional username"));
+    m_mqttPassInput = new QLineEdit(haGroup);
+    m_mqttPassInput->setEchoMode(QLineEdit::Password);
+    m_mqttPassInput->setPlaceholderText(tr("Optional password"));
+
+    m_mqttConnectBtn = new QPushButton(tr("Connect to MQTT Broker"), haGroup);
+    connect(m_mqttConnectBtn, &QPushButton::clicked, this, [this]() {
+        m_mqttService.start(m_mqttHostInput->text().trimmed(),
+                            static_cast<quint16>(m_mqttPortInput->value()),
+                            m_mqttUserInput->text().trimmed(),
+                            m_mqttPassInput->text().trimmed());
+        m_mqttStatusLabel->setText(tr("Connecting to %1:%2...").arg(m_mqttHostInput->text()).arg(m_mqttPortInput->value()));
+    });
+
+    m_mqttStatusLabel = new QLabel(tr("Auto-discovery publishes to <code>homeassistant/light/thor_404/config</code>"), haGroup);
+    m_mqttStatusLabel->setWordWrap(true);
+
+    haForm->addRow(tr("MQTT Broker:"), m_mqttHostInput);
+    haForm->addRow(tr("Port:"), m_mqttPortInput);
+    haForm->addRow(tr("Username:"), m_mqttUserInput);
+    haForm->addRow(tr("Password:"), m_mqttPassInput);
+    haForm->addRow("", m_mqttConnectBtn);
+    haForm->addRow(m_mqttStatusLabel);
+    integLayout->addWidget(haGroup);
+
+    integLayout->addStretch(1);
+    m_tabs->addTab(integrationTab, tr("Integrations"));
+
+    mainLayout->addWidget(m_tabs);
+
+    // Status Message footer
+    m_msgLabel = new QLabel(central);
+    m_msgLabel->setAlignment(Qt::AlignCenter);
+    m_msgLabel->setWordWrap(true);
+    mainLayout->addWidget(m_msgLabel);
 
     updateStatusBadge(false);
+}
+
+void MainWindow::setupTray() {
+    m_trayIcon = new QSystemTrayIcon(this);
+    m_trayMenu = new QMenu(this);
+
+    auto *showAction = m_trayMenu->addAction(tr("Open Window"));
+    connect(showAction, &QAction::triggered, this, &MainWindow::showNormal);
+
+    m_trayMenu->addSeparator();
+
+    auto *redAction = m_trayMenu->addAction(tr("Red Static"));
+    connect(redAction, &QAction::triggered, this, [this]() {
+        EffectConfig cfg;
+        cfg.effect = EffectId::Static;
+        cfg.r = 255; cfg.g = 0; cfg.b = 0;
+        applyConfig(cfg);
+    });
+
+    auto *waveAction = m_trayMenu->addAction(tr("Wave Effect"));
+    connect(waveAction, &QAction::triggered, this, [this]() {
+        EffectConfig cfg;
+        cfg.effect = EffectId::Wave;
+        cfg.multicolor = true;
+        applyConfig(cfg);
+    });
+
+    auto *offAction = m_trayMenu->addAction(tr("Turn Off"));
+    connect(offAction, &QAction::triggered, this, [this]() {
+        EffectConfig cfg;
+        cfg.effect = EffectId::Off;
+        applyConfig(cfg);
+    });
+
+    m_trayMenu->addSeparator();
+
+    auto *quitAction = m_trayMenu->addAction(tr("Quit"));
+    connect(quitAction, &QAction::triggered, qApp, &QApplication::quit);
+
+    m_trayIcon->setContextMenu(m_trayMenu);
+    connect(m_trayIcon, &QSystemTrayIcon::activated, this, &MainWindow::onTrayActivated);
+
+    updateTrayIcon();
+    m_trayIcon->show();
+}
+
+void MainWindow::updateTrayIcon() {
+    // Dynamic monochrome icon adapting to KDE Plasma Light / Dark palette
+    QColor textColor = palette().color(QPalette::WindowText);
+    bool isDarkTheme = (textColor.lightness() > 128); // Text is light -> Dark theme
+
+    QPixmap pix(22, 22);
+    pix.fill(Qt::transparent);
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing);
+
+    QColor iconColor = isDarkTheme ? QColor(240, 240, 240) : QColor(30, 30, 30);
+    p.setPen(QPen(iconColor, 1.8));
+
+    // Draw keyboard icon contour
+    p.drawRoundedRect(2, 4, 18, 14, 2, 2);
+
+    // Draw key grid lines
+    p.drawLine(5, 8, 8, 8);
+    p.drawLine(10, 8, 13, 8);
+    p.drawLine(15, 8, 17, 8);
+
+    p.drawLine(5, 11, 7, 11);
+    p.drawLine(9, 11, 13, 11);
+    p.drawLine(15, 11, 17, 11);
+
+    // Spacebar
+    p.drawLine(7, 14, 15, 14);
+
+    p.end();
+
+    m_trayIcon->setIcon(QIcon(pix));
+}
+
+void MainWindow::onTrayActivated(QSystemTrayIcon::ActivationReason reason) {
+    if (reason == QSystemTrayIcon::Trigger) {
+        if (isVisible()) {
+            hide();
+        } else {
+            showNormal();
+            activateWindow();
+        }
+    }
 }
 
 void MainWindow::updateStatusBadge(bool connected) {
@@ -160,19 +406,19 @@ void MainWindow::updateStatusBadge(bool connected) {
             text += QString(" (0x%1)").arg(dev->productId, 4, 16, QChar('0')).toUpper();
         }
         m_statusBadge->setText(text);
-        m_statusBadge->setStyleSheet("color: #388e3c; font-weight: bold; padding: 4px;");
+        m_statusBadge->setStyleSheet("color: #388e3c; font-weight: bold; padding: 2px;");
         if (m_msgLabel) m_msgLabel->clear();
     } else {
         auto devs = m_deviceManager.enumerateDevices();
         if (!devs.empty()) {
-            m_statusBadge->setText(tr("○ Detected (Permission Denied)"));
-            m_statusBadge->setStyleSheet("color: #f57c00; font-weight: bold; padding: 4px;");
+            m_statusBadge->setText(tr("○ Permission Denied"));
+            m_statusBadge->setStyleSheet("color: #f57c00; font-weight: bold; padding: 2px;");
             if (m_msgLabel) {
                 m_msgLabel->setText(tr("Device detected on USB but hidraw permissions are missing.<br>Run: <code>sudo cp 99-genesis-thor.rules /etc/udev/rules.d/ && sudo udevadm trigger</code>"));
             }
         } else {
             m_statusBadge->setText(tr("○ Disconnected"));
-            m_statusBadge->setStyleSheet("color: #d32f2f; font-weight: bold; padding: 4px;");
+            m_statusBadge->setStyleSheet("color: #d32f2f; font-weight: bold; padding: 2px;");
             if (m_msgLabel) m_msgLabel->clear();
         }
     }
@@ -231,19 +477,30 @@ void MainWindow::onPickColor() {
     }
 }
 
-void MainWindow::onApply() {
+void MainWindow::applyConfig(const EffectConfig &cfg) {
     if (!m_deviceManager.isConnected()) {
-        // Try to connect once more
         int targetPid = m_modelCombo->currentData().toInt();
         m_deviceManager.openDevice(targetPid);
         updateStatusBadge(m_deviceManager.isConnected());
     }
 
     if (!m_deviceManager.isConnected()) {
-        m_msgLabel->setText(tr("Device not found. Check USB connection and udev rules."));
+        if (m_msgLabel) m_msgLabel->setText(tr("Device not found. Check USB connection and udev rules."));
         return;
     }
 
+    std::string err;
+    if (m_deviceManager.applyEffect(cfg, &err)) {
+        if (m_msgLabel) m_msgLabel->setText(tr("Settings applied successfully!"));
+        m_mqttService.publishState(cfg.effect != EffectId::Off, cfg.brightness,
+                                   QColor(cfg.r, cfg.g, cfg.b), "active");
+        m_sysfsLedService.updateBrightness(cfg.brightness);
+    } else {
+        if (m_msgLabel) m_msgLabel->setText(tr("Failed to apply settings: %1").arg(QString::fromStdString(err)));
+    }
+}
+
+void MainWindow::onApply() {
     EffectConfig cfg;
     cfg.effect = static_cast<EffectId>(m_effectCombo->currentData().toInt());
     cfg.r = static_cast<uint8_t>(m_selectedColor.red());
@@ -254,11 +511,45 @@ void MainWindow::onApply() {
     cfg.speed = static_cast<uint8_t>(m_speedSlider->value());
     cfg.direction = static_cast<Direction>(m_directionCombo->currentData().toInt());
 
+    applyConfig(cfg);
+}
+
+void MainWindow::onProfileSelected(int index) {
+    if (!m_deviceManager.isConnected()) {
+        m_msgLabel->setText(tr("Cannot switch profile: device disconnected"));
+        return;
+    }
     std::string err;
-    if (m_deviceManager.applyEffect(cfg, &err)) {
-        m_msgLabel->setText(tr("Settings applied successfully!"));
+    if (m_deviceManager.setProfile(static_cast<uint8_t>(index), &err)) {
+        m_msgLabel->setText(tr("Switched to Hardware Profile %1 (stored in keyboard memory)").arg(index + 1));
     } else {
-        m_msgLabel->setText(tr("Failed to apply settings: %1").arg(QString::fromStdString(err)));
+        m_msgLabel->setText(tr("Failed to switch profile: %1").arg(QString::fromStdString(err)));
+    }
+}
+
+void MainWindow::onAssignMacro() {
+    if (!m_deviceManager.isConnected()) {
+        m_msgLabel->setText(tr("Cannot assign macro: device disconnected"));
+        return;
+    }
+    uint8_t key = static_cast<uint8_t>(m_macroKeyCombo->currentData().toInt());
+    QString text = m_macroInput->text();
+    if (text.isEmpty()) {
+        m_msgLabel->setText(tr("Please enter a macro sequence"));
+        return;
+    }
+
+    std::vector<uint8_t> scancodes;
+    for (QChar c : text) {
+        scancodes.push_back(static_cast<uint8_t>(c.toLatin1()));
+    }
+
+    std::string err;
+    if (m_deviceManager.assignKeyMacro(key, scancodes, &err)) {
+        m_msgLabel->setText(tr("Flashed macro sequence directly into keyboard memory!"));
+        m_macroInput->clear();
+    } else {
+        m_msgLabel->setText(tr("Failed to flash macro: %1").arg(QString::fromStdString(err)));
     }
 }
 

@@ -8,7 +8,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
 
 find_package(PkgConfig REQUIRED)
 # Allow finding user-installed or system hidapi-hidraw
@@ -23,6 +23,10 @@ add_executable(thor-404-controller
     src/devicemanager.cpp
     src/mainwindow.h
     src/mainwindow.cpp
+    src/mqttservice.h
+    src/mqttservice.cpp
+    src/sysfsledservice.h
+    src/sysfsledservice.cpp
 )
 
 target_include_directories(thor-404-controller PRIVATE
@@ -32,6 +36,7 @@ target_include_directories(thor-404-controller PRIVATE
 
 target_link_libraries(thor-404-controller PRIVATE
     Qt6::Widgets
+    Qt6::Network
     ${HIDAPI_LIBRARIES}
 )
 

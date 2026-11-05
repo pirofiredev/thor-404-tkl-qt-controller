@@ -93,6 +93,8 @@ public:
     void closeDevice();
 
     bool applyEffect(const EffectConfig& config, std::string* errorMessage = nullptr);
+    bool setProfile(uint8_t profileIndex, std::string* errorMessage = nullptr);
+    bool assignKeyMacro(uint8_t keyIndex, const std::vector<uint8_t>& scancodes, std::string* errorMessage = nullptr);
 
     void setDebug(bool enable) { m_debug = enable; }
     bool isDebug() const { return m_debug; }
