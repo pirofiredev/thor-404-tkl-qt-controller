@@ -6,10 +6,10 @@ This guide explains how to build the `.deb` installer package and package the so
 
 ## 1. Prerequisites
 
-Ensure required build tools and libraries are installed:
+Ensure required build tools and libraries are installed (Debian-based):
 ```bash
 sudo apt update
-sudo apt install -y cmake g++ libqt6widgets6 libqt6network6 qt6-base-dev libhidapi-dev
+sudo apt install -y cmake g++ libqt6widgets6 libqt6network6 qt6-base-dev libhidapi-dev rpm
 ```
 
 ---
@@ -29,21 +29,22 @@ Run framing self-checks to ensure zero protocol regressions:
 
 ---
 
-## 3. Generate `.deb` Package
+## 3. Generate Packages (`.deb` & `.rpm`)
 
-Generate the Debian package using CPack:
+Generate packages using CPack (supports both DEB and RPM if `rpm` is installed):
 ```bash
 cd build
-cpack -G DEB
+cpack -G "DEB;RPM"
 cd ..
 ```
 
-The generated file will be located at:
+The generated files will be located at:
 ```text
 build/thor-404-controller-1.0.0-Linux.deb
+build/thor-404-controller-1.0.0-Linux.rpm
 ```
 
-To test local installation:
+To test local Debian installation:
 ```bash
 sudo apt install ./build/thor-404-controller-1.0.0-Linux.deb
 ```
