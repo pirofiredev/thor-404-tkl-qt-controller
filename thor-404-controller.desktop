@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Genesis Thor 404 Controller
+GenericName=Keyboard Controller
+Comment=Native Linux Controller for Genesis Thor 404 TKL Keyboard
+Exec=thor-404-controller
+Icon=thor-404-controller
+Terminal=false
+Categories=HardwareSettings;Settings;Utility;Qt;
+StartupWMClass=thor-404-controller
+Keywords=keyboard;genesis;rgb;lighting;thor;

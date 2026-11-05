@@ -82,15 +82,20 @@ private:
 
     // Lighting Tab
     InteractiveKeyboardWidget *m_lightingVisualizer{nullptr};
+    QWidget *m_customActionsContainer{nullptr};
     QPushButton *m_fillAllBtn{nullptr};
     QPushButton *m_applyCustomBtn{nullptr};
     QComboBox *m_effectCombo{nullptr};
     QPushButton *m_colorBtn{nullptr};
     QCheckBox *m_multicolorCheck{nullptr};
+    QWidget *m_colorContainer{nullptr};
+    QWidget *m_brightnessContainer{nullptr};
     QSlider *m_brightnessSlider{nullptr};
     QLabel *m_brightnessValLabel{nullptr};
+    QWidget *m_speedContainer{nullptr};
     QSlider *m_speedSlider{nullptr};
     QLabel *m_speedValLabel{nullptr};
+    QWidget *m_directionContainer{nullptr};
     QComboBox *m_directionCombo{nullptr};
     QPushButton *m_applyBtn{nullptr};
 
@@ -99,9 +104,14 @@ private:
     QSpinBox *m_mqttPortInput{nullptr};
     QLineEdit *m_mqttUserInput{nullptr};
     QLineEdit *m_mqttPassInput{nullptr};
+    QCheckBox *m_mqttAutoConnectCheck{nullptr};
     QPushButton *m_mqttConnectBtn{nullptr};
     QLabel *m_mqttStatusLabel{nullptr};
     QLabel *m_kdeLedStatusLabel{nullptr};
+
+    // Autostart Setting
+    QCheckBox *m_autostartCheck{nullptr};
+    void updateAutostart(bool enable);
 
     QLabel *m_msgLabel{nullptr};
     QTimer *m_pollTimer{nullptr};

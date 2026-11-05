@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Genesis Gaming Gaming Emblem (Stylized Angular Shield / Wings) -->
+  <polygon points="50,6 92,26 84,72 50,94 16,72 8,26" fill="#e51b24" />
+  <polygon points="50,14 84,30 78,67 50,85 22,67 16,30" fill="#181818" />
+  <!-- Central stylized 'G' / Chevron elements -->
+  <polygon points="50,22 75,34 68,48 50,39 32,48 25,34" fill="#ffffff" />
+  <polygon points="50,44 70,54 64,68 50,60 36,68 30,54" fill="#e51b24" />
+  <polygon points="50,65 60,70 50,77 40,70" fill="#ffffff" />
+</svg>

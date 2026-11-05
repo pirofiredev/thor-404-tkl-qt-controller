@@ -29,6 +29,7 @@ add_executable(thor-404-controller
     src/sysfsledservice.cpp
     src/interactivekeyboardwidget.h
     src/interactivekeyboardwidget.cpp
+    resources.qrc
 )
 
 target_include_directories(thor-404-controller PRIVATE
@@ -68,4 +69,21 @@ target_link_directories(test-framing PRIVATE
 
 # Install rules
 install(TARGETS thor-404-controller DESTINATION bin)
-install(FILES 99-genesis-thor.rules DESTINATION /lib/udev/rules.d/ OPTIONAL)
+install(FILES 99-genesis-thor.rules DESTINATION /lib/udev/rules.d/)
+install(FILES thor-404-controller.desktop DESTINATION share/applications)
+install(FILES resources/genesis-logo.svg DESTINATION share/icons/hicolor/scalable/apps/ RENAME thor-404-controller.svg)
+
+# CPack Debian Packaging
+set(CPACK_PACKAGE_NAME "thor-404-controller")
+set(CPACK_PACKAGE_VENDOR "Genesis Linux Community")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Native Linux Qt6/C++20 Controller for Genesis Thor 404 TKL Keyboard")
+set(CPACK_PACKAGE_VERSION "1.0.0")
+set(CPACK_PACKAGE_CONTACT "pirofiredev <support@factory.ai>")
+set(CPACK_GENERATOR "DEB")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "pirofiredev")
+set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
+set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.34), libstdc++6 (>= 11), libqt6widgets6 (>= 6.2.0), libqt6network6 (>= 6.2.0), libhidapi-hidraw0")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
+
+include(CPack)

@@ -225,8 +225,10 @@ int main(int argc, char *argv[]) {
     runPacketFramingTests();
 
     QApplication app(argc, argv);
-    app.setApplicationName("thor-404-qt-controller");
+    app.setApplicationName("thor-404-controller");
     app.setApplicationDisplayName("Genesis Thor 404 TKL RGB Controller");
+    app.setWindowIcon(QIcon(":/resources/genesis-logo.svg"));
+    app.setDesktopFileName("thor-404-controller");
 
     thor::MainWindow window;
     window.show();

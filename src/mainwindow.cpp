@@ -19,12 +19,18 @@
 #include <QLineEdit>
 #include <QSpinBox>
 #include <QEvent>
+#include <QSettings>
+#include <QDir>
+#include <QFile>
+#include <QStandardPaths>
+#include <QIcon>
 
 namespace thor {
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
     setWindowTitle(tr("Genesis Thor 404 TKL"));
+    setWindowIcon(QIcon(":/resources/genesis-logo.svg"));
     resize(520, 590);
     setMinimumWidth(460);
 
@@ -47,7 +53,35 @@ MainWindow::MainWindow(QWidget *parent)
             QString color = connected ? "#388e3c" : "#d32f2f";
             m_mqttStatusLabel->setText(QString("<b style='color:%1;'>%2</b><br><small>Auto-discovery: <code>homeassistant/light/thor_404/config</code></small>").arg(color, message));
         }
+        if (connected) {
+            // Save successful settings for autoconnect
+            QSettings settings("Genesis", "Thor404Controller");
+            settings.setValue("mqtt/host", m_mqttHostInput->text().trimmed());
+            settings.setValue("mqtt/port", m_mqttPortInput->value());
+            settings.setValue("mqtt/user", m_mqttUserInput->text().trimmed());
+            settings.setValue("mqtt/pass", m_mqttPassInput->text().trimmed());
+            settings.setValue("mqtt/autoConnect", m_mqttAutoConnectCheck->isChecked());
+        }
     });
+
+    // Load persisted settings
+    QSettings settings("Genesis", "Thor404Controller");
+    QString savedHost = settings.value("mqtt/host", "127.0.0.1").toString();
+    int savedPort = settings.value("mqtt/port", 1883).toInt();
+    QString savedUser = settings.value("mqtt/user", "").toString();
+    QString savedPass = settings.value("mqtt/pass", "").toString();
+    bool autoConnect = settings.value("mqtt/autoConnect", false).toBool();
+
+    m_mqttHostInput->setText(savedHost);
+    m_mqttPortInput->setValue(savedPort);
+    m_mqttUserInput->setText(savedUser);
+    m_mqttPassInput->setText(savedPass);
+    m_mqttAutoConnectCheck->setChecked(autoConnect);
+
+    if (autoConnect) {
+        m_mqttService.start(savedHost, static_cast<quint16>(savedPort), savedUser, savedPass);
+        m_mqttStatusLabel->setText(tr("Auto-connecting to %1:%2...").arg(savedHost).arg(savedPort));
+    }
 
     // Connect KDE virtual sysfs LED brightness callback
     m_sysfsLedService.setBrightnessCallback([this](uint8_t brightness) {
@@ -163,14 +197,16 @@ void MainWindow::setupUi() {
     m_lightingVisualizer->setCurrentBrushColor(m_selectedColor);
     lightingLayout->addWidget(m_lightingVisualizer);
 
-    auto *visActionLayout = new QHBoxLayout();
-    m_fillAllBtn = new QPushButton(tr("Fill All With Brush"), lightingTab);
+    m_customActionsContainer = new QWidget(lightingTab);
+    auto *visActionLayout = new QHBoxLayout(m_customActionsContainer);
+    visActionLayout->setContentsMargins(0, 0, 0, 0);
+    m_fillAllBtn = new QPushButton(tr("Fill All With Brush"), m_customActionsContainer);
     connect(m_fillAllBtn, &QPushButton::clicked, this, [this]() {
         m_lightingVisualizer->setAllKeysColor(m_selectedColor);
     });
     visActionLayout->addWidget(m_fillAllBtn);
 
-    auto *wasdBtn = new QPushButton(tr("Highlight WASD"), lightingTab);
+    auto *wasdBtn = new QPushButton(tr("Highlight WASD"), m_customActionsContainer);
     connect(wasdBtn, &QPushButton::clicked, this, [this]() {
         m_lightingVisualizer->setKeyColor("w", m_selectedColor);
         m_lightingVisualizer->setKeyColor("a", m_selectedColor);
@@ -179,7 +215,7 @@ void MainWindow::setupUi() {
     });
     visActionLayout->addWidget(wasdBtn);
 
-    auto *arrowBtn = new QPushButton(tr("Highlight Arrows"), lightingTab);
+    auto *arrowBtn = new QPushButton(tr("Highlight Arrows"), m_customActionsContainer);
     connect(arrowBtn, &QPushButton::clicked, this, [this]() {
         m_lightingVisualizer->setKeyColor("up arrow", m_selectedColor);
         m_lightingVisualizer->setKeyColor("down arrow", m_selectedColor);
@@ -189,54 +225,64 @@ void MainWindow::setupUi() {
     visActionLayout->addWidget(arrowBtn);
 
     visActionLayout->addStretch(1);
-    lightingLayout->addLayout(visActionLayout);
+    lightingLayout->addWidget(m_customActionsContainer);
 
     // Color picker
-    auto *colorRowLayout = new QHBoxLayout();
-    m_colorBtn = new QPushButton(tr("Select Color..."), lightingTab);
+    m_colorContainer = new QWidget(lightingTab);
+    auto *colorRowLayout = new QHBoxLayout(m_colorContainer);
+    colorRowLayout->setContentsMargins(0, 0, 0, 0);
+    m_colorBtn = new QPushButton(tr("Select Color..."), m_colorContainer);
     updateSwatch();
     connect(m_colorBtn, &QPushButton::clicked, this, &MainWindow::onPickColor);
 
-    m_multicolorCheck = new QCheckBox(tr("Multicolor / Rainbow"), lightingTab);
+    m_multicolorCheck = new QCheckBox(tr("Multicolor / Rainbow"), m_colorContainer);
     colorRowLayout->addWidget(m_colorBtn);
     colorRowLayout->addWidget(m_multicolorCheck);
-    form->addRow(tr("Color:"), colorRowLayout);
+    form->addRow(tr("Color:"), m_colorContainer);
 
     // Brightness slider (1 - 16)
-    auto *brightLayout = new QHBoxLayout();
-    m_brightnessSlider = new QSlider(Qt::Horizontal, lightingTab);
+    m_brightnessContainer = new QWidget(lightingTab);
+    auto *brightLayout = new QHBoxLayout(m_brightnessContainer);
+    brightLayout->setContentsMargins(0, 0, 0, 0);
+    m_brightnessSlider = new QSlider(Qt::Horizontal, m_brightnessContainer);
     m_brightnessSlider->setRange(1, 16);
     m_brightnessSlider->setValue(16);
-    m_brightnessValLabel = new QLabel(QString::number(m_brightnessSlider->value()), lightingTab);
+    m_brightnessValLabel = new QLabel(QString::number(m_brightnessSlider->value()), m_brightnessContainer);
     m_brightnessValLabel->setFixedWidth(24);
     connect(m_brightnessSlider, &QSlider::valueChanged, this, [this](int val) {
         m_brightnessValLabel->setText(QString::number(val));
     });
     brightLayout->addWidget(m_brightnessSlider);
     brightLayout->addWidget(m_brightnessValLabel);
-    form->addRow(tr("Brightness:"), brightLayout);
+    form->addRow(tr("Brightness:"), m_brightnessContainer);
 
     // Speed slider (1 - 16)
-    auto *speedLayout = new QHBoxLayout();
-    m_speedSlider = new QSlider(Qt::Horizontal, lightingTab);
+    m_speedContainer = new QWidget(lightingTab);
+    auto *speedLayout = new QHBoxLayout(m_speedContainer);
+    speedLayout->setContentsMargins(0, 0, 0, 0);
+    m_speedSlider = new QSlider(Qt::Horizontal, m_speedContainer);
     m_speedSlider->setRange(1, 16);
     m_speedSlider->setValue(16);
-    m_speedValLabel = new QLabel(QString::number(m_speedSlider->value()), lightingTab);
+    m_speedValLabel = new QLabel(QString::number(m_speedSlider->value()), m_speedContainer);
     m_speedValLabel->setFixedWidth(24);
     connect(m_speedSlider, &QSlider::valueChanged, this, [this](int val) {
         m_speedValLabel->setText(QString::number(val));
     });
     speedLayout->addWidget(m_speedSlider);
     speedLayout->addWidget(m_speedValLabel);
-    form->addRow(tr("Speed:"), speedLayout);
+    form->addRow(tr("Speed:"), m_speedContainer);
 
     // Direction dropdown
-    m_directionCombo = new QComboBox(lightingTab);
+    m_directionContainer = new QWidget(lightingTab);
+    auto *dirLayout = new QHBoxLayout(m_directionContainer);
+    dirLayout->setContentsMargins(0, 0, 0, 0);
+    m_directionCombo = new QComboBox(m_directionContainer);
     m_directionCombo->addItem(tr("Right"), static_cast<int>(Direction::Right));
     m_directionCombo->addItem(tr("Left"), static_cast<int>(Direction::Left));
     m_directionCombo->addItem(tr("Up"), static_cast<int>(Direction::Up));
     m_directionCombo->addItem(tr("Down"), static_cast<int>(Direction::Down));
-    form->addRow(tr("Direction:"), m_directionCombo);
+    dirLayout->addWidget(m_directionCombo);
+    form->addRow(tr("Direction:"), m_directionContainer);
 
     lightingLayout->addLayout(form);
 
@@ -253,6 +299,18 @@ void MainWindow::setupUi() {
     auto *integLayout = new QVBoxLayout(integrationTab);
     integLayout->setContentsMargins(12, 12, 12, 12);
     integLayout->setSpacing(14);
+
+    // System / Autostart Group
+    auto *sysGroup = new QGroupBox(tr("System Startup & Daemon"), integrationTab);
+    auto *sysLayout = new QVBoxLayout(sysGroup);
+    m_autostartCheck = new QCheckBox(tr("Start Thor 404 Controller automatically on system login"), sysGroup);
+    
+    // Check if autostart desktop entry exists
+    QString autostartPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + "/autostart/thor-404-controller.desktop";
+    m_autostartCheck->setChecked(QFile::exists(autostartPath));
+    connect(m_autostartCheck, &QCheckBox::toggled, this, &MainWindow::updateAutostart);
+    sysLayout->addWidget(m_autostartCheck);
+    integLayout->addWidget(sysGroup);
 
     // KDE Brightness
     auto *kdeGroup = new QGroupBox(tr("KDE Plasma Native Brightness Applet"), integrationTab);
@@ -275,9 +333,12 @@ void MainWindow::setupUi() {
     m_mqttPassInput = new QLineEdit(haGroup);
     m_mqttPassInput->setEchoMode(QLineEdit::Password);
     m_mqttPassInput->setPlaceholderText(tr("Optional password"));
+    m_mqttAutoConnectCheck = new QCheckBox(tr("Auto-connect to MQTT on startup"), haGroup);
 
     m_mqttConnectBtn = new QPushButton(tr("Connect to MQTT Broker"), haGroup);
     connect(m_mqttConnectBtn, &QPushButton::clicked, this, [this]() {
+        QSettings s("Genesis", "Thor404Controller");
+        s.setValue("mqtt/autoConnect", m_mqttAutoConnectCheck->isChecked());
         m_mqttService.start(m_mqttHostInput->text().trimmed(),
                             static_cast<quint16>(m_mqttPortInput->value()),
                             m_mqttUserInput->text().trimmed(),
@@ -292,6 +353,7 @@ void MainWindow::setupUi() {
     haForm->addRow(tr("Port:"), m_mqttPortInput);
     haForm->addRow(tr("Username:"), m_mqttUserInput);
     haForm->addRow(tr("Password:"), m_mqttPassInput);
+    haForm->addRow("", m_mqttAutoConnectCheck);
     haForm->addRow("", m_mqttConnectBtn);
     haForm->addRow(m_mqttStatusLabel);
     integLayout->addWidget(haGroup);
@@ -646,11 +708,39 @@ void MainWindow::onModelSelected(int) {
 void MainWindow::onEffectChanged(int) {
     auto eff = static_cast<EffectId>(m_effectCombo->currentData().toInt());
     bool isOff = (eff == EffectId::Off);
-    m_colorBtn->setEnabled(!isOff);
-    m_multicolorCheck->setEnabled(!isOff);
-    m_brightnessSlider->setEnabled(!isOff);
-    m_speedSlider->setEnabled(!isOff && eff != EffectId::Static);
-    m_directionCombo->setEnabled(!isOff && (eff == EffectId::Wave));
+    bool isCustom = (eff == EffectId::Custom);
+    bool isStatic = (eff == EffectId::Static);
+    bool hasDirection = (eff == EffectId::Wave || eff == EffectId::Shuttle || eff == EffectId::Shockwave);
+    bool hasSpeed = (!isOff && !isStatic && !isCustom);
+    bool hasMulticolor = (!isOff && !isStatic && !isCustom);
+
+    // Show custom actions (Fill All, WASD, Arrows) only in Custom mode
+    if (m_customActionsContainer) {
+        m_customActionsContainer->setVisible(isCustom);
+    }
+
+    // Color picker
+    if (m_colorContainer) {
+        m_colorContainer->setVisible(!isOff);
+    }
+    if (m_multicolorCheck) {
+        m_multicolorCheck->setVisible(hasMulticolor);
+    }
+
+    // Brightness
+    if (m_brightnessContainer) {
+        m_brightnessContainer->setVisible(!isOff);
+    }
+
+    // Speed
+    if (m_speedContainer) {
+        m_speedContainer->setVisible(hasSpeed);
+    }
+
+    // Direction
+    if (m_directionContainer) {
+        m_directionContainer->setVisible(hasDirection);
+    }
 }
 
 void MainWindow::onPickColor() {
@@ -774,6 +864,32 @@ void MainWindow::onApplyCustomLighting() {
         if (m_msgLabel) m_msgLabel->setText(tr("Custom per-key lighting sent to keyboard!"));
     } else {
         if (m_msgLabel) m_msgLabel->setText(tr("Failed to apply custom lighting: %1").arg(QString::fromStdString(err)));
+    }
+}
+
+void MainWindow::updateAutostart(bool enable) {
+    QString autostartDir = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + "/autostart";
+    QDir().mkpath(autostartDir);
+    QString filePath = autostartDir + "/thor-404-controller.desktop";
+
+    if (enable) {
+        QFile file(filePath);
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QString desktopContent =
+                "[Desktop Entry]\n"
+                "Type=Application\n"
+                "Name=Genesis Thor 404 Controller\n"
+                "Comment=Background RGB and Brightness Controller for Genesis Thor 404 TKL\n"
+                "Exec=thor-404-controller\n"
+                "Icon=thor-404-controller\n"
+                "Terminal=false\n"
+                "Categories=Utility;HardwareSettings;\n"
+                "X-GNOME-Autostart-enabled=true\n";
+            file.write(desktopContent.toUtf8());
+            file.close();
+        }
+    } else {
+        QFile::remove(filePath);
     }
 }
 
