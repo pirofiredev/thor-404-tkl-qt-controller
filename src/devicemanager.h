@@ -4,6 +4,8 @@
 #include <array>
 #include <string>
 #include <vector>
+#include <map>
+#include <utility>
 #include <optional>
 #include <chrono>
 #include <thread>
@@ -37,7 +39,8 @@ enum class EffectId : uint8_t {
     Escape = 0x10,
     SineWave = 0x11,
     Wave = 0x12,
-    Shuttle = 0x13
+    Shuttle = 0x13,
+    Custom = 0x14
 };
 
 enum class Direction : uint8_t {
@@ -75,6 +78,7 @@ PacketBuffer makeHandshakePacket2();
 PacketBuffer makeHandshakePacket3();
 std::vector<PacketBuffer> makeCommonPrefixPackets();
 std::vector<PacketBuffer> makeCommonFramePackets();
+std::vector<PacketBuffer> makeCustomFramePackets(const std::map<std::pair<uint8_t, uint8_t>, std::array<uint8_t, 3>>& keyRgbMap);
 PacketBuffer makeEffectPacket(const EffectConfig& config);
 PacketBuffer makeFinalizePacket1();
 PacketBuffer makeFinalizePacket2();
@@ -93,6 +97,7 @@ public:
     void closeDevice();
 
     bool applyEffect(const EffectConfig& config, std::string* errorMessage = nullptr);
+    bool applyCustomEffect(const std::map<std::pair<uint8_t, uint8_t>, std::array<uint8_t, 3>>& keyRgbMap, uint8_t brightness = 16, std::string* errorMessage = nullptr);
     bool setProfile(uint8_t profileIndex, std::string* errorMessage = nullptr);
     bool assignKeyMacro(uint8_t keyIndex, const std::vector<uint8_t>& scancodes, std::string* errorMessage = nullptr);
 

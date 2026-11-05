@@ -69,6 +69,35 @@ std::vector<PacketBuffer> makeCommonFramePackets() {
     return frames;
 }
 
+std::vector<PacketBuffer> makeCustomFramePackets(const std::map<std::pair<uint8_t, uint8_t>, std::array<uint8_t, 3>>& keyRgbMap) {
+    std::vector<PacketBuffer> frames(9);
+    for (auto& frame : frames) {
+        frame.fill(0x00);
+        frame[0] = 0x00;
+        for (size_t i = 0; i < 16; ++i) {
+            frame[1 + i * 4] = 0x80;
+            frame[1 + i * 4 + 1] = 0x00;
+            frame[1 + i * 4 + 2] = 0x00;
+            frame[1 + i * 4 + 3] = 0x00;
+        }
+    }
+
+    for (const auto& [coord, rgb] : keyRgbMap) {
+        uint8_t line = coord.first;
+        uint8_t dword = coord.second;
+        if (line >= 12 && line <= 20 && dword < 16) {
+            size_t rowIndex = line - 12;
+            if (rowIndex < frames.size()) {
+                frames[rowIndex][1 + dword * 4 + 0] = 0x80;
+                frames[rowIndex][1 + dword * 4 + 1] = rgb[0];
+                frames[rowIndex][1 + dword * 4 + 2] = rgb[1];
+                frames[rowIndex][1 + dword * 4 + 3] = rgb[2];
+            }
+        }
+    }
+    return frames;
+}
+
 PacketBuffer makeEffectPacket(const EffectConfig& config) {
     PacketBuffer buf{};
     buf[0] = 0x00; // Report ID
@@ -284,6 +313,59 @@ bool DeviceManager::applyEffect(const EffectConfig& config, std::string* errorMe
         }
 
         // Optional drain of response report like official protocol
+        PacketBuffer resp{};
+        resp[0] = 0x00;
+        hid_get_feature_report(m_handle, resp.data(), resp.size());
+
+        if (i + 1 < sequence.size()) {
+            std::this_thread::sleep_for(SLEEP_DURATION);
+        }
+    }
+
+    return true;
+}
+
+bool DeviceManager::applyCustomEffect(const std::map<std::pair<uint8_t, uint8_t>, std::array<uint8_t, 3>>& keyRgbMap, uint8_t brightness, std::string* errorMessage) {
+    if (!m_handle) {
+        if (errorMessage) *errorMessage = "Device not connected";
+        return false;
+    }
+
+    constexpr auto SLEEP_DURATION = std::chrono::milliseconds(10);
+
+    std::vector<PacketBuffer> sequence;
+    sequence.push_back(makeHandshakePacket1());
+    sequence.push_back(makeHandshakePacket2());
+    sequence.push_back(makeHandshakePacket3());
+
+    auto prefixes = makeCommonPrefixPackets();
+    sequence.insert(sequence.end(), prefixes.begin(), prefixes.end());
+
+    auto frames = makeCustomFramePackets(keyRgbMap);
+    sequence.insert(sequence.end(), frames.begin(), frames.end());
+
+    EffectConfig cfg;
+    cfg.effect = EffectId::Custom;
+    cfg.r = 0;
+    cfg.g = 0;
+    cfg.b = 0;
+    cfg.brightness = brightness;
+    cfg.speed = 16;
+    sequence.push_back(makeEffectPacket(cfg));
+
+    sequence.push_back(makeFinalizePacket1());
+    sequence.push_back(makeFinalizePacket2());
+
+    for (size_t i = 0; i < sequence.size(); ++i) {
+        if (!sendFeatureReport(sequence[i])) {
+            if (errorMessage) {
+                const wchar_t* hidErr = hid_error(m_handle);
+                std::wstring ws = hidErr ? hidErr : L"Failed to send feature report";
+                *errorMessage = std::string(ws.begin(), ws.end());
+            }
+            return false;
+        }
+
         PacketBuffer resp{};
         resp[0] = 0x00;
         hid_get_feature_report(m_handle, resp.data(), resp.size());

@@ -27,6 +27,8 @@ add_executable(thor-404-controller
     src/mqttservice.cpp
     src/sysfsledservice.h
     src/sysfsledservice.cpp
+    src/interactivekeyboardwidget.h
+    src/interactivekeyboardwidget.cpp
 )
 
 target_include_directories(thor-404-controller PRIVATE

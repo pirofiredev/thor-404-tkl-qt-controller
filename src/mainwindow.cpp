@@ -130,6 +130,7 @@ void MainWindow::setupUi() {
     // Effect
     m_effectCombo = new QComboBox(lightingTab);
     m_effectCombo->addItem(tr("Static"), static_cast<int>(EffectId::Static));
+    m_effectCombo->addItem(tr("Customize (Per-Key RGB)"), static_cast<int>(EffectId::Custom));
     m_effectCombo->addItem(tr("Breathing"), static_cast<int>(EffectId::Breathing));
     m_effectCombo->addItem(tr("Neon"), static_cast<int>(EffectId::Neon));
     m_effectCombo->addItem(tr("Wave"), static_cast<int>(EffectId::Wave));
@@ -148,6 +149,40 @@ void MainWindow::setupUi() {
     connect(m_effectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onEffectChanged);
     form->addRow(tr("Effect:"), m_effectCombo);
+
+    // Interactive Keyboard Visualizer
+    m_lightingVisualizer = new InteractiveKeyboardWidget(lightingTab);
+    m_lightingVisualizer->setMode(InteractiveKeyboardWidget::Mode::ColorPicker);
+    m_lightingVisualizer->setCurrentBrushColor(m_selectedColor);
+    lightingLayout->addWidget(m_lightingVisualizer);
+
+    auto *visActionLayout = new QHBoxLayout();
+    m_fillAllBtn = new QPushButton(tr("Fill All With Brush"), lightingTab);
+    connect(m_fillAllBtn, &QPushButton::clicked, this, [this]() {
+        m_lightingVisualizer->setAllKeysColor(m_selectedColor);
+    });
+    visActionLayout->addWidget(m_fillAllBtn);
+
+    auto *wasdBtn = new QPushButton(tr("Highlight WASD"), lightingTab);
+    connect(wasdBtn, &QPushButton::clicked, this, [this]() {
+        m_lightingVisualizer->setKeyColor("w", m_selectedColor);
+        m_lightingVisualizer->setKeyColor("a", m_selectedColor);
+        m_lightingVisualizer->setKeyColor("s", m_selectedColor);
+        m_lightingVisualizer->setKeyColor("d", m_selectedColor);
+    });
+    visActionLayout->addWidget(wasdBtn);
+
+    auto *arrowBtn = new QPushButton(tr("Highlight Arrows"), lightingTab);
+    connect(arrowBtn, &QPushButton::clicked, this, [this]() {
+        m_lightingVisualizer->setKeyColor("up arrow", m_selectedColor);
+        m_lightingVisualizer->setKeyColor("down arrow", m_selectedColor);
+        m_lightingVisualizer->setKeyColor("left arrow", m_selectedColor);
+        m_lightingVisualizer->setKeyColor("right arrow", m_selectedColor);
+    });
+    visActionLayout->addWidget(arrowBtn);
+
+    visActionLayout->addStretch(1);
+    lightingLayout->addLayout(visActionLayout);
 
     // Color picker
     auto *colorRowLayout = new QHBoxLayout();
@@ -206,55 +241,7 @@ void MainWindow::setupUi() {
 
     m_tabs->addTab(lightingTab, tr("Lighting"));
 
-    // TAB 2: Profiles & Hardware Macros
-    auto *profileTab = new QWidget();
-    auto *profileLayout = new QVBoxLayout(profileTab);
-    profileLayout->setContentsMargins(12, 12, 12, 12);
-    profileLayout->setSpacing(14);
-
-    auto *profGroup = new QGroupBox(tr("Hardware Profiles (Onboard Memory)"), profileTab);
-    auto *profForm = new QFormLayout(profGroup);
-    m_profileCombo = new QComboBox(profGroup);
-    m_profileCombo->addItem(tr("Profile 1 (Default / Gaming)"), 0);
-    m_profileCombo->addItem(tr("Profile 2 (Office / Custom)"), 1);
-    m_applyProfileBtn = new QPushButton(tr("Switch Profile"), profGroup);
-    connect(m_applyProfileBtn, &QPushButton::clicked, this, [this]() {
-        onProfileSelected(m_profileCombo->currentIndex());
-    });
-    auto *profNote = new QLabel(tr("<small>Note: Thor 404 hardware supports 2 onboard profiles. You can also toggle between them using <b>Fn + Backspace</b> (Rec/Profile) or keyboard shortcuts.</small>"), profGroup);
-    profNote->setWordWrap(true);
-    profForm->addRow(tr("Select Profile:"), m_profileCombo);
-    profForm->addRow("", m_applyProfileBtn);
-    profForm->addRow(profNote);
-    profileLayout->addWidget(profGroup);
-
-    auto *macroGroup = new QGroupBox(tr("Direct Hardware Key Macro Assignment"), profileTab);
-    auto *macroForm = new QFormLayout(macroGroup);
-    m_macroKeyCombo = new QComboBox(macroGroup);
-    m_macroKeyCombo->addItem(tr("F1"), 0x3A);
-    m_macroKeyCombo->addItem(tr("F2"), 0x3B);
-    m_macroKeyCombo->addItem(tr("F3"), 0x3C);
-    m_macroKeyCombo->addItem(tr("F4"), 0x3D);
-    m_macroKeyCombo->addItem(tr("G (Macro Key)"), 0x0A);
-    m_macroKeyCombo->addItem(tr("Insert"), 0x49);
-    m_macroKeyCombo->addItem(tr("Home"), 0x4A);
-    m_macroKeyCombo->addItem(tr("Page Up"), 0x4B);
-
-    m_macroInput = new QLineEdit(macroGroup);
-    m_macroInput->setPlaceholderText(tr("Key sequence or text (e.g. GG WP)"));
-
-    m_assignMacroBtn = new QPushButton(tr("Flash Macro into Keyboard"), macroGroup);
-    connect(m_assignMacroBtn, &QPushButton::clicked, this, &MainWindow::onAssignMacro);
-
-    macroForm->addRow(tr("Target Key:"), m_macroKeyCombo);
-    macroForm->addRow(tr("Sequence:"), m_macroInput);
-    macroForm->addRow("", m_assignMacroBtn);
-    profileLayout->addWidget(macroGroup);
-
-    profileLayout->addStretch(1);
-    m_tabs->addTab(profileTab, tr("Profiles & Macros"));
-
-    // TAB 3: Integrations & Background Services
+    // TAB 2: Integrations & Background Services
     auto *integrationTab = new QWidget();
     auto *integLayout = new QVBoxLayout(integrationTab);
     integLayout->setContentsMargins(12, 12, 12, 12);
@@ -664,6 +651,9 @@ void MainWindow::onPickColor() {
     if (chosen.isValid()) {
         m_selectedColor = chosen;
         updateSwatch();
+        if (m_lightingVisualizer) {
+            m_lightingVisualizer->setCurrentBrushColor(m_selectedColor);
+        }
     }
 }
 
@@ -691,8 +681,14 @@ void MainWindow::applyConfig(const EffectConfig &cfg) {
 }
 
 void MainWindow::onApply() {
+    auto eff = static_cast<EffectId>(m_effectCombo->currentData().toInt());
+    if (eff == EffectId::Custom) {
+        onApplyCustomLighting();
+        return;
+    }
+
     EffectConfig cfg;
-    cfg.effect = static_cast<EffectId>(m_effectCombo->currentData().toInt());
+    cfg.effect = eff;
     cfg.r = static_cast<uint8_t>(m_selectedColor.red());
     cfg.g = static_cast<uint8_t>(m_selectedColor.green());
     cfg.b = static_cast<uint8_t>(m_selectedColor.blue());
@@ -704,42 +700,73 @@ void MainWindow::onApply() {
     applyConfig(cfg);
 }
 
-void MainWindow::onProfileSelected(int index) {
+void MainWindow::onApplyCustomLighting() {
     if (!m_deviceManager.isConnected()) {
-        m_msgLabel->setText(tr("Cannot switch profile: device disconnected"));
-        return;
+        int targetPid = m_modelCombo->currentData().toInt();
+        m_deviceManager.openDevice(targetPid);
+        updateStatusBadge(m_deviceManager.isConnected());
     }
-    std::string err;
-    if (m_deviceManager.setProfile(static_cast<uint8_t>(index), &err)) {
-        m_msgLabel->setText(tr("Switched to Hardware Profile %1").arg(index + 1));
-    } else {
-        m_msgLabel->setText(tr("Failed to switch profile: %1").arg(QString::fromStdString(err)));
-    }
-}
 
-void MainWindow::onAssignMacro() {
     if (!m_deviceManager.isConnected()) {
-        m_msgLabel->setText(tr("Cannot assign macro: device disconnected"));
-        return;
-    }
-    uint8_t key = static_cast<uint8_t>(m_macroKeyCombo->currentData().toInt());
-    QString text = m_macroInput->text();
-    if (text.isEmpty()) {
-        m_msgLabel->setText(tr("Please enter a macro sequence"));
+        if (m_msgLabel) m_msgLabel->setText(tr("Device not found. Check USB connection."));
         return;
     }
 
-    std::vector<uint8_t> scancodes;
-    for (QChar c : text) {
-        scancodes.push_back(static_cast<uint8_t>(c.toLatin1()));
+    // Convert visualizer key map to line/dword packet map
+    std::map<std::pair<uint8_t, uint8_t>, std::array<uint8_t, 3>> keyRgbMap;
+    if (m_lightingVisualizer) {
+        auto colors = m_lightingVisualizer->getKeyColors();
+        // Look up key coordinate definitions
+        // InteractiveKeyboardWidget has the keys
+        // Let's populate the active key colors
+        for (const auto& [id, col] : colors) {
+            // Find key definition
+            // Default ISO-88 key matrix mappings:
+            // Esc: 12, 1; F1-F12: 12, 2..13; Prt, Scr, Pau: 19, 0..3
+            // Number row: 13, 3..15; Backspace: 18, 7; Ins, Hom, PgUp: 19, 4..6
+            // Q row: 14, 5..15; [ ]: 15, 0..1; Del, End, PgDn: 19, 7..9
+            // Caps, A..L, ;, ', #: 15, 7..15; 16, 0..3; Enter: 17, 5
+            // LShift, \, Z..M, ,, ., /: 16, 9, 3, 10..15; 17, 0..3; RShift: 17, 4; Up: 18, 5
+            // Ctrl, Win, Alt, Space, AltGr, Fn, Menu, RCtrl: 17, 11..15; 18, 0..2; Arrows: 18, 3,4,6
+            static const std::map<std::string, std::pair<uint8_t, uint8_t>> idCoords = {
+                {"escape", {12, 1}}, {"f1", {12, 2}}, {"f2", {12, 3}}, {"f3", {12, 4}}, {"f4", {12, 5}},
+                {"f5", {12, 6}}, {"f6", {12, 7}}, {"f7", {12, 8}}, {"f8", {12, 9}}, {"f9", {12, 10}},
+                {"f10", {12, 11}}, {"f11", {12, 12}}, {"f12", {12, 13}},
+                {"prtsc", {19, 0}}, {"scrllk", {19, 1}}, {"pause", {19, 3}},
+                {"backtick", {13, 3}}, {"1", {13, 4}}, {"2", {13, 5}}, {"3", {13, 6}}, {"4", {13, 7}},
+                {"5", {13, 8}}, {"6", {13, 9}}, {"7", {13, 10}}, {"8", {13, 11}}, {"9", {13, 12}},
+                {"0", {13, 13}}, {"-", {13, 14}}, {"=", {13, 15}}, {"backspace", {18, 7}},
+                {"insert", {19, 4}}, {"home", {19, 5}}, {"page up", {19, 6}},
+                {"tab", {14, 5}}, {"q", {14, 6}}, {"w", {14, 7}}, {"e", {14, 8}}, {"r", {14, 9}},
+                {"t", {14, 10}}, {"y", {14, 11}}, {"u", {14, 12}}, {"i", {14, 13}}, {"o", {14, 14}},
+                {"p", {14, 15}}, {"[", {15, 0}}, {"]", {15, 1}},
+                {"del", {19, 7}}, {"end", {19, 8}}, {"page down", {19, 9}},
+                {"caps lock", {15, 7}}, {"a", {15, 8}}, {"s", {15, 9}}, {"d", {15, 10}}, {"f", {15, 11}},
+                {"g", {15, 12}}, {"h", {15, 13}}, {"j", {15, 14}}, {"k", {15, 15}}, {"l", {16, 0}},
+                {";", {16, 1}}, {"'", {16, 2}}, {"reverse slash", {16, 3}}, {"enter", {17, 5}},
+                {"left shift", {16, 9}}, {"iso_bslash", {16, 3}}, {"z", {16, 10}}, {"x", {16, 11}},
+                {"c", {16, 12}}, {"v", {16, 13}}, {"b", {16, 14}}, {"n", {16, 15}}, {"m", {17, 0}},
+                {",", {17, 1}}, {".", {17, 2}}, {"slash", {17, 3}}, {"right shift", {17, 4}},
+                {"up arrow", {18, 5}},
+                {"left ctrl", {17, 11}}, {"windows", {17, 12}}, {"left alt", {17, 13}}, {"space", {17, 14}},
+                {"right alt", {17, 15}}, {"function", {18, 0}}, {"menu", {18, 1}}, {"right ctrl", {18, 2}},
+                {"left arrow", {18, 3}}, {"down arrow", {18, 4}}, {"right arrow", {18, 6}}
+            };
+            auto it = idCoords.find(id);
+            if (it != idCoords.end()) {
+                keyRgbMap[it->second] = {static_cast<uint8_t>(col.red()),
+                                         static_cast<uint8_t>(col.green()),
+                                         static_cast<uint8_t>(col.blue())};
+            }
+        }
     }
 
+    uint8_t brightness = static_cast<uint8_t>(m_brightnessSlider->value());
     std::string err;
-    if (m_deviceManager.assignKeyMacro(key, scancodes, &err)) {
-        m_msgLabel->setText(tr("Flashed macro sequence directly into keyboard memory!"));
-        m_macroInput->clear();
+    if (m_deviceManager.applyCustomEffect(keyRgbMap, brightness, &err)) {
+        if (m_msgLabel) m_msgLabel->setText(tr("Custom per-key lighting sent to keyboard!"));
     } else {
-        m_msgLabel->setText(tr("Failed to flash macro: %1").arg(QString::fromStdString(err)));
+        if (m_msgLabel) m_msgLabel->setText(tr("Failed to apply custom lighting: %1").arg(QString::fromStdString(err)));
     }
 }
 

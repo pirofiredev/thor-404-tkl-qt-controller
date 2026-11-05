@@ -8,6 +8,7 @@
 #include "devicemanager.h"
 #include "mqttservice.h"
 #include "sysfsledservice.h"
+#include "interactivekeyboardwidget.h"
 
 class QLabel;
 class QComboBox;
@@ -38,8 +39,7 @@ private slots:
     void onEffectChanged(int index);
     void onPickColor();
     void onApply();
-    void onProfileSelected(int index);
-    void onAssignMacro();
+    void onApplyCustomLighting();
     void onTrayActivated(QSystemTrayIcon::ActivationReason reason);
     void updateTrayIcon();
     void updateTrayMenuText();
@@ -81,6 +81,9 @@ private:
     QTabWidget *m_tabs{nullptr};
 
     // Lighting Tab
+    InteractiveKeyboardWidget *m_lightingVisualizer{nullptr};
+    QPushButton *m_fillAllBtn{nullptr};
+    QPushButton *m_applyCustomBtn{nullptr};
     QComboBox *m_effectCombo{nullptr};
     QPushButton *m_colorBtn{nullptr};
     QCheckBox *m_multicolorCheck{nullptr};
@@ -90,13 +93,6 @@ private:
     QLabel *m_speedValLabel{nullptr};
     QComboBox *m_directionCombo{nullptr};
     QPushButton *m_applyBtn{nullptr};
-
-    // Profiles & Hardware Macros Tab
-    QComboBox *m_profileCombo{nullptr};
-    QPushButton *m_applyProfileBtn{nullptr};
-    QComboBox *m_macroKeyCombo{nullptr};
-    QLineEdit *m_macroInput{nullptr};
-    QPushButton *m_assignMacroBtn{nullptr};
 
     // Home Assistant / Daemon Tab
     QLineEdit *m_mqttHostInput{nullptr};
