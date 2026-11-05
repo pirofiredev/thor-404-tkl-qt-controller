@@ -54,12 +54,12 @@ systemctl status mosquitto
 ### 2. Connect in Home Assistant
 1. Find your machine's IP address:
    ```bash
-   ip -4 addr show scope global
+   ip a
    ```
 2. In Home Assistant: Go to **Settings** $\rightarrow$ **Devices & Services** $\rightarrow$ Click **+ Add Integration** $\rightarrow$ Search for **MQTT**.
 3. Select standard **MQTT** (not JSON):
    - **Broker**: Enter your PC's LAN IP (from `ip a`).
-   - **Port**: `1883`.
+   - **Port**: `1883` (default).
    - Leave Username and Password empty (if using anonymous `local.conf`), and click **Submit**.
 4. In Thor 404 Controller:
    - Go to the **Integrations** tab.
