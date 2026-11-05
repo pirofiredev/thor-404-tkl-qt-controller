@@ -336,6 +336,74 @@ bool DeviceManager::setProfile(uint8_t profileIndex, std::string* errorMessage) 
     return true;
 }
 
+bool DeviceManager::blinkProfileKey(uint8_t profileIndex, int blinkCount) {
+    if (!m_handle) return false;
+
+    // Line 13 = row index 1 (13 - 12 = 1)
+    // Profile 0 -> '-' key: row index 1, dword 14
+    // Profile 1 -> '=' key: row index 1, dword 15
+    size_t targetDword = (profileIndex % 2 == 0) ? 14 : 15;
+
+    auto makeBlinkFrames = [targetDword](bool on) {
+        std::vector<PacketBuffer> frames(9);
+        for (size_t r = 0; r < 9; ++r) {
+            frames[r][0] = 0x00;
+            for (size_t dw = 0; dw < 16; ++dw) {
+                frames[r][1 + dw * 4] = 0x80;
+                if (on && r == 1 && dw == targetDword) {
+                    frames[r][1 + dw * 4 + 1] = 0xFF; // R
+                    frames[r][1 + dw * 4 + 2] = 0xFF; // G
+                    frames[r][1 + dw * 4 + 3] = 0xFF; // B (White)
+                } else {
+                    frames[r][1 + dw * 4 + 1] = 0x00;
+                    frames[r][1 + dw * 4 + 2] = 0x00;
+                    frames[r][1 + dw * 4 + 3] = 0x00;
+                }
+            }
+        }
+        return frames;
+    };
+
+    auto sendCustomFrame = [this](const std::vector<PacketBuffer>& frames) {
+        constexpr auto SLEEP_DURATION = std::chrono::milliseconds(8);
+        std::vector<PacketBuffer> seq;
+        seq.push_back(makeHandshakePacket1());
+        seq.push_back(makeHandshakePacket2());
+        seq.push_back(makeHandshakePacket3());
+
+        auto prefixes = makeCommonPrefixPackets();
+        seq.insert(seq.end(), prefixes.begin(), prefixes.end());
+        seq.insert(seq.end(), frames.begin(), frames.end());
+
+        // Effect packet with Custom mode 0x14
+        PacketBuffer eff{};
+        eff[0] = 0x00;
+        eff[1] = 0x14; // Custom per-key effect ID
+        eff[10] = 16;  // Brightness
+        eff[11] = 16;  // Speed
+        eff[15] = 0xAA;
+        eff[16] = 0x55;
+        seq.push_back(eff);
+
+        seq.push_back(makeFinalizePacket1());
+        seq.push_back(makeFinalizePacket2());
+
+        for (const auto& pkt : seq) {
+            sendFeatureReport(pkt);
+            std::this_thread::sleep_for(SLEEP_DURATION);
+        }
+    };
+
+    for (int b = 0; b < blinkCount; ++b) {
+        sendCustomFrame(makeBlinkFrames(true));
+        std::this_thread::sleep_for(std::chrono::milliseconds(220));
+        sendCustomFrame(makeBlinkFrames(false));
+        std::this_thread::sleep_for(std::chrono::milliseconds(220));
+    }
+
+    return true;
+}
+
 bool DeviceManager::assignKeyMacro(uint8_t keyIndex, const std::vector<uint8_t>& scancodes, std::string* errorMessage) {
     if (!m_handle) {
         if (errorMessage) *errorMessage = "Device not connected";
